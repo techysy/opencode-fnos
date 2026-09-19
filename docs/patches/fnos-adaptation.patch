@@ -1,0 +1,28 @@
+diff --git a/packages/script/src/index.ts b/packages/script/src/index.ts
+--- a/packages/script/src/index.ts
++++ b/packages/script/src/index.ts
+@@ -1 +1 @@
+-const expectedBunVersionRange = `^${expectedBunVersion}`
++const expectedBunVersionRange = ">=1.3.0"
+diff --git a/packages/opencode/src/server/shared/ui.ts b/packages/opencode/src/server/shared/ui.ts
+--- a/packages/opencode/src/server/shared/ui.ts
++++ b/packages/opencode/src/server/shared/ui.ts
+@@ -1 +1 @@
+-  `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob:`
++  `default-src 'self'; frame-ancestors *; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob: ws: wss:`
+diff --git a/packages/opencode/src/server/shared/public-ui.ts b/packages/opencode/src/server/shared/public-ui.ts
+--- a/packages/opencode/src/server/shared/public-ui.ts
++++ b/packages/opencode/src/server/shared/public-ui.ts
+@@ -1,3 +1,11 @@
++const PUBLIC_UI_PREFIXES = ["/assets/", "/favicon"]
++
+ export function isPublicUIPath(method: string, pathname: string) {
+-  return method === "GET" && PUBLIC_UI_PATHS.has(pathname)
++  if (method !== "GET") return false
++  // The embedded Web UI shell (HTML, JS, CSS, icons) must load without
++  // credentials so the page can render inside the fnOS desktop iframe.
++  if (pathname === "/" || pathname === "/index.html") return true
++  if (PUBLIC_UI_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true
++  if (PUBLIC_UI_PATHS.has(pathname)) return true
++  return /\.(?:js|css|png|svg|ico|webmanifest|woff2?|map)$/.test(pathname)
+ }

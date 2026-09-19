@@ -1,0 +1,144 @@
+#!/bin/bash
+# OpenCode TUI — 启停控制
+# 用法：main {start|stop|status|restart}
+#
+# 说明：本脚本不写死卷路径，数据目录由 _lib.sh 推导
+set -uo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=_lib.sh
+. "${DIR}/_lib.sh"
+opencode_resolve_paths
+opencode_resolve_appdir
+
+PORT="${TRIM_SERVICE_PORT:-19282}"
+PID_FILE="${DATA_DIR}/opencode-tui.pid"
+
+# TUI 工作目录（用户的代码仓库）。引擎拒绝把 / 当作项目目录。
+# 默认隔离在本应用数据目录下，避免与其他版本冲突。
+WORKSPACE="${OPENCODE_WORKSPACE:-${DATA_DIR}/workspace}"
+
+OPENCODE_BIN="${REAL_APP_DIR}/bin/opencode"
+TTYD_BIN="${REAL_APP_DIR}/bin/ttyd"
+WEB_INDEX="${REAL_APP_DIR}/web/index.html"
+
+log() { echo "[$(date '+%F %T')] $*" >> "${LOG}" 2>&1; }
+
+start() {
+    mkdir -p "${DATA_DIR}" "${WORKSPACE}" 2>/dev/null
+    log "=== start ==="
+
+    if [ ! -x "${OPENCODE_BIN}" ]; then
+        echo "ERROR: 缺少可执行文件 ${OPENCODE_BIN}" >&2
+        log "ERROR: opencode not executable at ${OPENCODE_BIN}"
+        return 1
+    fi
+    if [ ! -x "${TTYD_BIN}" ]; then
+        echo "ERROR: 缺少可执行文件 ${TTYD_BIN}" >&2
+        log "ERROR: ttyd not executable at ${TTYD_BIN}"
+        return 1
+    fi
+
+    # 已在运行则直接返回
+    if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+        echo "already running (pid $(cat "${PID_FILE}"))"
+        return 0
+    fi
+
+    # 清理残留进程与陈旧 PID
+    pkill -f "ttyd -p ${PORT}" 2>/dev/null || true
+    rm -f "${PID_FILE}"
+    sleep 1
+
+    # 数据隔离：XDG 目录全部指向应用数据目录
+    opencode_resolve_xdg
+    export TERM="xterm-256color"
+    export HOME="${DATA_DIR}"
+
+    log "starting TUI on 0.0.0.0:${PORT} (workspace=${WORKSPACE})"
+
+    # 引擎拒绝以 / 作为项目目录，必须先切到工作区
+    cd "${WORKSPACE}" || {
+        echo "ERROR: 无法进入工作目录 ${WORKSPACE}" >&2
+        log "ERROR: cannot cd to ${WORKSPACE}"
+        return 1
+    }
+
+    # 构建 ttyd 参数；自定义页面存在时才用 -I
+    TTYD_ARGS=(
+        -p "${PORT}"
+        -i "0.0.0.0"
+        -W
+        -t "fontSize=14"
+        -t "scrollback=10000"
+        -t "titleFixed=true"
+    )
+    [ -f "${WEB_INDEX}" ] && TTYD_ARGS+=(-I "${WEB_INDEX}")
+
+    nohup "${TTYD_BIN}" "${TTYD_ARGS[@]}" -- "${OPENCODE_BIN}" >> "${LOG}" 2>&1 < /dev/null &
+    PID=$!
+    echo "${PID}" > "${PID_FILE}"
+
+    # 健康检查：ttyd 存活 + HTTP 200 即视为启动成功。
+    #
+    # 注意：ttyd 是「懒启动」——只有客户端连上来（打开终端页面）才会
+    # fork 引擎子进程。因此这里不能要求引擎子进程存在，否则
+    # install_callback 里不带客户端调用 start 会误判失败。
+    local code=""
+    for _ in $(seq 1 20); do
+        if ! kill -0 "${PID}" 2>/dev/null; then
+            echo "ERROR: ttyd 启动后立即退出，见 ${LOG}" >&2
+            log "ERROR: ttyd exited during startup"
+            rm -f "${PID_FILE}"
+            return 1
+        fi
+        code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null)"
+        if [ "${code}" = "200" ]; then
+            echo "started (pid ${PID}, port ${PORT})"
+            log "started OK (pid ${PID}, port ${PORT})"
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "ERROR: 健康检查超时（HTTP ${code:-无响应}），见 ${LOG}" >&2
+    log "ERROR: health check timeout (http=${code:-none})"
+    return 1
+}
+
+stop() {
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid="$(cat "${PID_FILE}")"
+        kill "${pid}" 2>/dev/null || true
+        sleep 1
+        kill -9 "${pid}" 2>/dev/null || true
+        rm -f "${PID_FILE}"
+    fi
+    pkill -f "ttyd -p ${PORT}" 2>/dev/null || true
+    log "stopped"
+    echo "stopped"
+}
+
+status() {
+    if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+        echo "running (pid $(cat "${PID_FILE}"))"
+        return 0
+    fi
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null)"
+    if [ "${code}" = "200" ]; then
+        echo "running (port ${PORT})"
+        return 0
+    fi
+    echo "stopped"
+    return 1
+}
+
+case "${1:-start}" in
+    start)   start ;;
+    stop)    stop ;;
+    status)  status ;;
+    restart) stop; sleep 1; start ;;
+    *) echo "用法: $0 {start|stop|status|restart}"; exit 1 ;;
+esac

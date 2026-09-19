@@ -1,0 +1,37 @@
+#!/bin/bash
+# 安装后置：确保数据目录可写 + 主动拉起服务
+# 经验来源：飞牛应用中心安装后不一定自启，需在此主动 start
+set -uo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=_lib.sh
+. "${DIR}/_lib.sh"
+opencode_resolve_paths
+opencode_resolve_appdir
+
+mkdir -p "${DATA_DIR}"
+chmod 755 "${DATA_DIR}" 2>/dev/null || true
+
+echo "[$(date '+%F %T')] install_callback start (APP_DIR=${APP_DIR}, DATA_DIR=${DATA_DIR})" >> "${LOG}"
+
+# 检查关键文件
+missing=0
+for f in "${REAL_APP_DIR}/bin/opencode" "${REAL_APP_DIR}/bin/ttyd"; do
+    if [ ! -x "$f" ]; then
+        echo "[$(date '+%F %T')] ERROR: missing or not executable: $f" >> "${LOG}"
+        missing=1
+    fi
+done
+if [ "$missing" -eq 1 ]; then
+    echo "WARNING: 关键二进制缺失，请检查安装包完整性" >&2
+    exit 0
+fi
+
+# 主动拉起服务
+if "${DIR}/main" start; then
+    echo "[$(date '+%F %T')] install_callback: service started" >> "${LOG}"
+else
+    echo "[$(date '+%F %T')] install_callback: start failed, see log" >> "${LOG}"
+fi
+
+exit 0

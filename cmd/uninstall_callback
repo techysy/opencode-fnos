@@ -1,0 +1,14 @@
+#!/bin/bash
+# 卸载后置：停止服务，清理 PID
+set -uo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=_lib.sh
+. "${DIR}/_lib.sh"
+opencode_resolve_paths
+
+echo "[$(date '+%F %T')] uninstall_callback start" >> "${LOG}" 2>/dev/null || true
+
+"${DIR}/main" stop >/dev/null 2>&1 || true
+
+exit 0

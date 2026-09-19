@@ -1,0 +1,48 @@
+[
+  {
+    "stepTitle": "使用协议与授权声明",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "请阅读以下条款。勾选「同意」后方可继续安装。"
+      },
+      {
+        "type": "checkbox",
+        "field": "wizard_agree_license",
+        "label": "我已阅读并同意以下全部条款",
+        "options": [
+          {
+            "label": "非官方声明：本应用是非官方的第三方适配项目，与 OpenCode 开发团队（anomalyco / SST）无任何隶属、赞助或背书关系。",
+            "value": "unofficial"
+          },
+          {
+            "label": "版权归属：OpenCode 引擎版权归其原作者所有，遵循 MIT 开源协议；本项目仅做飞牛 NAS 平台适配与打包。",
+            "value": "copyright"
+          },
+          {
+            "label": "无担保声明：本应用按「现状」提供，不附带任何明示或暗示的担保，包括但不限于适销性、特定用途适用性及不侵权保证。",
+            "value": "warranty"
+          },
+          {
+            "label": "风险自担：使用本应用产生的风险由你自行承担，包括但不限于数据丢失、服务中断、模型调用费用及 API 密钥泄露。",
+            "value": "risk"
+          },
+          {
+            "label": "权限说明：本应用需要访问 NAS 文件系统并以独立用户身份执行命令，请自行评估安全影响并妥善保管 API 凭据。",
+            "value": "permission"
+          },
+          {
+            "label": "网络安全：本应用默认监听局域网端口 19282，建议仅在可信网络环境使用，请勿直接暴露到公网。",
+            "value": "network"
+          },
+          {
+            "label": "开源许可：本项目遵循 MIT 协议发布，保留原始版权声明；你可以自由使用、修改和分发。",
+            "value": "license"
+          }
+        ],
+        "required": true,
+        "requiredMessage": "必须同意以上全部条款才能继续安装"
+      }
+    ]
+  }
+]

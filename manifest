@@ -1,0 +1,14 @@
+appname               = opencode-tui
+version               = 1.18.31
+display_name          = OpenCode TUI
+desc                  = OpenCode 终端界面（TUI）飞牛版 — 内置官方 v1.18.31 引擎，通过 Web 终端直接使用原版 TUI
+platform              = x86
+source                = thirdparty
+maintainer            = anomalyco
+maintainer_url        = https://github.com/anomalyco/opencode
+distributor           = techysy
+distributor_url       = https://github.com/techysy/opencode-fnos
+desktop_uidir         = ui
+desktop_applaunchname = opencode-tui.Application
+service_port          = 19282
+ctl_stop              = true

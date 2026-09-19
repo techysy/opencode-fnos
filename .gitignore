@@ -1,0 +1,15 @@
+# 构建产物（二进制过大，不入库；由 scripts/build.sh 自动获取）
+*.fpk
+dist/
+
+# 二进制不入库，仅保留占位文件
+app/bin/*
+!app/bin/.gitkeep
+
+# 临时
+_difftmp/
+*.log
+
+# 系统
+.DS_Store
+Thumbs.db

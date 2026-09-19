@@ -1,0 +1,28 @@
+{
+  "data-share": {
+    "shares": [
+      {
+        "name": "opencode-tui",
+        "permission": {
+          "rw": [
+            "opencode-tui"
+          ]
+        }
+      },
+      {
+        "name": "opencode-tui/data",
+        "permission": {
+          "rw": [
+            "opencode-tui"
+          ]
+        }
+      }
+    ]
+  },
+  "api-scope": [
+    "trim.file.sharedAccess",
+    "trim.file.path"
+  ],
+  "systemd-unit": {
+  }
+}

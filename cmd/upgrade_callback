@@ -1,0 +1,22 @@
+#!/bin/bash
+# 升级后置：重启服务以加载新版本
+set -uo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=_lib.sh
+. "${DIR}/_lib.sh"
+opencode_resolve_paths
+
+echo "[$(date '+%F %T')] upgrade_callback start" >> "${LOG}"
+
+# 先停旧进程（版本切换，二进制可能已替换）
+"${DIR}/main" stop >/dev/null 2>&1 || true
+sleep 1
+
+if "${DIR}/main" start; then
+    echo "[$(date '+%F %T')] upgrade_callback: service restarted" >> "${LOG}"
+else
+    echo "[$(date '+%F %T')] upgrade_callback: restart failed, see log" >> "${LOG}"
+fi
+
+exit 0

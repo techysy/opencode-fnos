@@ -1,0 +1,318 @@
+name: Build OpenCode TUI fpk
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      upstream_version:
+        description: "上游 OpenCode 版本（留空用 VERSION 文件）"
+        required: false
+        default: ""
+      architectures:
+        description: "构建架构（逗号分隔：x86,arm 或 all）"
+        required: false
+        default: "all"
+
+permissions:
+  contents: write
+
+jobs:
+  # 解析上游版本 + 决定构建哪些架构
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      matrix: ${{ steps.ver.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 确定版本号与架构矩阵
+        id: ver
+        run: |
+          set -euo pipefail
+          V="${{ github.event.inputs.upstream_version }}"
+          if [ -z "$V" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          if [ -z "$V" ]; then
+            V="$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+          WANT="${{ github.event.inputs.architectures }}"
+          [ -z "$WANT" ] && WANT="all"
+          if [ "$WANT" = "all" ]; then
+            M='[{"arch":"x86","runner":"ubuntu-24.04"},{"arch":"arm","runner":"ubuntu-24.04-arm"}]'
+          else
+            M="["
+            first=1
+            for a in ${WANT//,/ }; do
+              case "$a" in
+                x86) R="ubuntu-24.04" ;;
+                arm) R="ubuntu-24.04-arm" ;;
+                *) echo "::error::未知架构 $a"; exit 1 ;;
+              esac
+              [ $first -eq 0 ] && M="$M,"
+              M="$M{\"arch\":\"$a\",\"runner\":\"$R\"}"
+              first=0
+            done
+            M="$M]"
+          fi
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          echo "📌 版本：$V"
+          echo "📌 架构：$M"
+
+  build-fpk:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    # arm 用原生 ARM runner，避免交叉编译
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 显示运行环境
+        run: |
+          set -eu
+          uname -m
+          # 不用管道，避免 ldd 收到 SIGPIPE 报 Broken pipe
+          ldd --version > /tmp/ldd.txt 2>&1 || true
+          sed -n '1p' /tmp/ldd.txt
+
+      # 不指定版本：setup-bun 会读仓库 package.json 的 packageManager（bun@1.3.14），
+      # 与上游构建脚本要求的版本保持一致
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: 下载 fnpack（官方源 + SHA256 校验）
+        env:
+          FNPACK_VERSION: "1.2.1"
+        run: |
+          # 本步骤故意不用 set -o pipefail：下方读取 fnpack 输出时，
+          # 子进程可能收到 SIGPIPE(141)，pipefail 会将其误判为失败。
+          set -eu
+          if [ "${{ matrix.arch }}" = "arm" ]; then
+            FNPACK_BIN="fnpack-${FNPACK_VERSION}-linux-arm64"
+            FNPACK_SHA256="aad9e16b101267d30017f39ab969e3c085fbce209716f8bd3b1e167eaf15e0cf"
+          else
+            FNPACK_BIN="fnpack-${FNPACK_VERSION}-linux-amd64"
+            FNPACK_SHA256="72d2a4095da676b64510b023731a227b369d80f8079bc45ff8a2f802ec0480c1"
+          fi
+          curl -fsSL -o /usr/local/bin/fnpack "https://static2.fnnas.com/fnpack/${FNPACK_BIN}"
+          echo "${FNPACK_SHA256}  /usr/local/bin/fnpack" | sha256sum -c -
+          chmod +x /usr/local/bin/fnpack
+          fnpack --help > /tmp/fnpack-help.txt 2>&1 || true
+          sed -n '1,2p' /tmp/fnpack-help.txt
+          echo "fnpack 就绪"
+
+      - name: 从源码构建引擎
+        env:
+          UPSTREAM_VERSION: ${{ needs.prepare.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+          WORK: ${{ runner.temp }}/opencode-build
+        run: |
+          set -euo pipefail
+          # 用 tarball 而非 git clone：体积更小、速度快
+          mkdir -p "$WORK/src"
+          curl -fSL --retry 3 -o "$WORK/opencode.tar.gz" \
+            "https://codeload.github.com/anomalyco/opencode/tar.gz/refs/tags/v${UPSTREAM_VERSION}"
+          tar xzf "$WORK/opencode.tar.gz" -C "$WORK/src" --strip-components=1
+
+          cd "$WORK/src"
+          # 上游 tarball 不含 .git，用 patch -p1 应用适配补丁
+          patch -p1 --forward < "$GITHUB_WORKSPACE/docs/patches/fnos-adaptation.patch"
+
+          bun install --ignore-scripts
+
+          # build 脚本需要分支信息，tarball 不含 .git
+          git init -q .
+          cd packages/opencode
+          # 不传 --skip-install：build.ts 会用 --os="*" --cpu="*" 拉取
+          # @opentui/core 与 @parcel/watcher 的全平台原生二进制，
+          # 缺了这些单文件编译会失败。
+          OPENCODE_CHANNEL=local OPENCODE_VERSION=local \
+            bun run script/build.ts --single
+
+          # --single 会按当前 runner 架构产出对应目录，这里直接探测而非硬编码
+          case "$(uname -m)" in
+            aarch64|arm64) EXPECT_ARCH="arm64" ;;
+            x86_64|amd64)  EXPECT_ARCH="x64" ;;
+            *) echo "::error::未知 runner 架构 $(uname -m)"; exit 1 ;;
+          esac
+          TARGET="opencode-linux-${EXPECT_ARCH}"
+          [ -x "dist/${TARGET}/bin/opencode" ] || {
+            echo "::error::未找到 dist/${TARGET}/bin/opencode，实际产物："
+            ls -d dist/*/ 2>/dev/null || true
+            exit 1
+          }
+          mkdir -p "$GITHUB_WORKSPACE/app/bin"
+          cp "dist/${TARGET}/bin/opencode" "$GITHUB_WORKSPACE/app/bin/opencode"
+          ls -lh "$GITHUB_WORKSPACE/app/bin/opencode"
+
+      - name: 下载 ttyd
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.arch }}" = "arm" ]; then TTYD="ttyd.aarch64"; else TTYD="ttyd.x86_64"; fi
+          curl -fsSL -o "$GITHUB_WORKSPACE/app/bin/ttyd" \
+            "https://github.com/tsl0922/ttyd/releases/download/1.7.7/${TTYD}"
+          chmod +x "$GITHUB_WORKSPACE/app/bin/ttyd"
+          file "$GITHUB_WORKSPACE/app/bin/ttyd" || true
+
+      - name: 设置 manifest platform + 同步版本
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          if grep -qE '^platform[[:space:]]*=' manifest; then
+            sed -i "s/^platform[[:space:]]*=.*/platform               = ${{ matrix.arch }}/" manifest
+          else
+            echo "platform               = ${{ matrix.arch }}" >> manifest
+          fi
+          bash scripts/sync-version.sh "${{ needs.prepare.outputs.version }}"
+          grep -E '^(platform|appname|version|service_port|ctl_stop)[[:space:]]*=' manifest
+
+      - name: 清理符号链接
+        run: |
+          find "$GITHUB_WORKSPACE" -type l -not -path '*/.git/*' -delete 2>/dev/null || true
+          echo "剩余符号链接: $(find "$GITHUB_WORKSPACE" -type l -not -path '*/.git/*' | wc -l)"
+
+      - name: 构建 fpk
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          rm -f ./*.fpk
+          fnpack build -d .
+          VERSION="${{ needs.prepare.outputs.version }}"
+          OUT="opencode-tui-${VERSION}-${{ matrix.arch }}.fpk"
+          mv opencode-tui.fpk "$OUT"
+          mkdir -p dist && mv "$OUT" dist/
+          ls -lh "dist/$OUT"
+
+      - name: 校验产物
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          OUT="dist/opencode-tui-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.fpk"
+          ARCH="${{ matrix.arch }}"
+
+          # 先落盘再比对，避免 tar | grep -q 触发 SIGPIPE(141)
+          tar -tzf "$OUT" > /tmp/pkg-list.txt
+          tar -xzOf "$OUT" app.tgz > /tmp/app.tgz
+          tar -tzf /tmp/app.tgz > /tmp/app-list.txt
+
+          echo "── 包结构 ──"
+          for f in manifest wizard/install LICENSE; do
+            grep -qx "$f" /tmp/pkg-list.txt || { echo "::error::缺 $f"; exit 1; }
+          done
+
+          echo "── 二进制 ──"
+          for f in bin/opencode bin/ttyd; do
+            grep -qx "$f" /tmp/app-list.txt || { echo "::error::缺 $f"; exit 1; }
+          done
+
+          echo "── 生命周期脚本 ──"
+          for f in main install_init install_callback uninstall_init uninstall_callback \
+                   upgrade_init upgrade_callback config_init config_callback _lib.sh; do
+            grep -qx "cmd/$f" /tmp/pkg-list.txt || { echo "::error::缺 cmd/$f"; exit 1; }
+          done
+          mkdir -p /tmp/ci-cmd && tar -xzf "$OUT" -C /tmp/ci-cmd cmd
+          for f in /tmp/ci-cmd/cmd/*; do bash -n "$f" || { echo "::error::语法错误 $f"; exit 1; }; done
+
+          echo "── 无硬编码卷路径 ──"
+          HC=$(grep -rn "/vol4" /tmp/ci-cmd/cmd/ 2>/dev/null | grep -vE ":[0-9]+: *#" || true)
+          [ -z "$HC" ] || { echo "$HC"; echo "::error::代码含硬编码 /vol4"; exit 1; }
+
+          echo "── 页面脚本语法（白屏防护）──"
+          # app/web/index.html 由 ttyd 官方页面字符串替换而来。
+          # 替换若破坏压缩 JS，浏览器会 SyntaxError 导致整页白屏，
+          # 而 HTTP / WebSocket 全部正常，极难排查。此处强制静态校验。
+          mkdir -p /tmp/ci-web && tar -xzf /tmp/app.tgz -C /tmp/ci-web web
+          node scripts/check-web-syntax.js /tmp/ci-web/web/index.html
+
+          echo "── 架构校验（ELF e_machine，小端序）──"
+          mkdir -p /tmp/ci-bin && tar -xzf /tmp/app.tgz -C /tmp/ci-bin bin/opencode
+          MACHINE=$(python3 -c "h=open('/tmp/ci-bin/bin/opencode','rb').read(20); print('0x%04x' % (h[18]|(h[19]<<8)) if len(h)>=20 else 'unknown')")
+          echo "  e_machine = $MACHINE"
+          if [ "$ARCH" = "arm" ]; then
+            [ "$MACHINE" = "0x00b7" ] || { echo "::error::期望 ARM64(0x00b7)，实为 $MACHINE"; exit 1; }
+          else
+            [ "$MACHINE" = "0x003e" ] || { echo "::error::期望 x86_64(0x003e)，实为 $MACHINE"; exit 1; }
+          fi
+
+          echo "── platform 字段 ──"
+          tar -xzOf "$OUT" manifest > /tmp/pkg-manifest.txt
+          PKG_PLATFORM=$(grep '^platform' /tmp/pkg-manifest.txt | sed 's/.*= *//' | tr -d '[:space:]')
+          echo "  platform = '${PKG_PLATFORM}'"
+          if [ "$ARCH" = "arm" ]; then EXPECT_PLATFORM="arm"; else EXPECT_PLATFORM="x86"; fi
+          [ "$PKG_PLATFORM" = "$EXPECT_PLATFORM" ] || {
+            echo "::error::platform 为 '${PKG_PLATFORM}'，期望 '${EXPECT_PLATFORM}'"; exit 1; }
+
+          echo "── 版本一致性 ──"
+          PKG_VER=$(grep '^version' /tmp/pkg-manifest.txt | sed 's/.*= *//' | tr -d '[:space:]')
+          [ "$PKG_VER" = "${{ needs.prepare.outputs.version }}" ] || {
+            echo "::error::版本不一致：包内 ${PKG_VER} ≠ ${{ needs.prepare.outputs.version }}"; exit 1; }
+
+          echo "✅ 校验通过（v${PKG_VER} / ${ARCH}）"
+
+      - name: 生成校验和
+        run: |
+          cd "$GITHUB_WORKSPACE/dist"
+          sha256sum "opencode-tui-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.fpk" \
+            > "SHA256SUMS-${{ matrix.arch }}"
+          cat "SHA256SUMS-${{ matrix.arch }}"
+
+      - name: 上传 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-tui-fpk-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            dist/*.fpk
+            dist/SHA256SUMS-*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: [prepare, build-fpk]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载全部 fpk
+        uses: actions/download-artifact@v4
+        with:
+          path: fpk-assets
+          pattern: opencode-tui-fpk-*
+          merge-multiple: true
+
+      # 先确保 release 存在且带标题——否则首个 attach 会用裸 tag 名创建它。
+      # 已存在时不动（notes 手工维护，不覆盖）。
+      - name: 确保 Release 存在
+        run: |
+          gh release view "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" \
+              --title "OpenCode TUI ${GITHUB_REF_NAME}" \
+              --notes "Release notes pending — see [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/master/CHANGELOG.md)."
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: 上传到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            fpk-assets/*.fpk
+            fpk-assets/SHA256SUMS-*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 汇总
+        run: |
+          echo "## ✅ OpenCode TUI fpk 构建完成（v${{ needs.prepare.outputs.version }}）" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          ls -lh fpk-assets/ >> "$GITHUB_STEP_SUMMARY"

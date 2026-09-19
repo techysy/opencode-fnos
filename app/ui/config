@@ -1,0 +1,13 @@
+{
+  ".url": {
+    "opencode-tui.Application": {
+      "title": "OpenCode TUI",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "http",
+      "port": "19282",
+      "url": "/",
+      "allUsers": true
+    }
+  }
+}
