@@ -12,7 +12,7 @@ opencode_resolve_paths
 opencode_resolve_appdir
 
 PORT="${TRIM_SERVICE_PORT:-19282}"
-PID_FILE="${DATA_DIR}/opencode-tui.pid"
+PID_FILE="${DATA_DIR}/oc.pid"
 
 # TUI 工作目录（用户的代码仓库）。引擎拒绝把 / 当作项目目录。
 # 默认隔离在本应用数据目录下，避免与其他版本冲突。

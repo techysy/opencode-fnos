@@ -99,12 +99,15 @@ fi
 
 # --- fnpack build ---
 cd "$ROOT"
-rm -f opencode-tui.fpk
+# fnpack 以 manifest 的 appname 命名产物，这里动态读取，避免改名后失效
+APPNAME=$(sed -n 's/^appname[[:space:]]*=[[:space:]]*\([^[:space:]]*\)/\1/p' "$ROOT/manifest" | head -1)
+[ -n "$APPNAME" ] || { echo 'ERROR: 无法从 manifest 解析 appname' >&2; exit 1; }
+rm -f "$APPNAME.fpk"
 fnpack build >/dev/null
-[ -f opencode-tui.fpk ] || { echo "ERROR: 打包失败" >&2; exit 1; }
+[ -f "$APPNAME.fpk" ] || { echo 'ERROR: 打包失败（未生成 $APPNAME.fpk）' >&2; exit 1; }
 
 OUT="opencode-tui-${UPSTREAM_VERSION}-${PLATFORM}.fpk"
-mv opencode-tui.fpk "$OUT"
+mv "$APPNAME.fpk" "$OUT"
 echo "✓ 构建完成：$OUT ($(du -h "$OUT" | cut -f1))"
 
 # --- 生成校验和 ---

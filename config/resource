@@ -2,18 +2,18 @@
   "data-share": {
     "shares": [
       {
-        "name": "opencode-tui",
+        "name": "oc",
         "permission": {
           "rw": [
-            "opencode-tui"
+            "oc"
           ]
         }
       },
       {
-        "name": "opencode-tui/data",
+        "name": "oc/data",
         "permission": {
           "rw": [
-            "opencode-tui"
+            "oc"
           ]
         }
       }

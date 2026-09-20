@@ -2,6 +2,6 @@
   "defaults": {
     "run-as": "package"
   },
-  "username": "opencode-tui",
-  "groupname": "opencode-tui"
+  "username": "oc",
+  "groupname": "oc"
 }

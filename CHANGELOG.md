@@ -12,11 +12,11 @@
 
 - 🖥️ **官方原版 TUI**：直接使用官方 `opencode` 二进制的 TUI（终端界面），**未重制界面**
 - 🌐 **网页终端接入**：通过 ttyd 1.7.7 把 TUI 包装为网页终端，飞牛桌面 iframe 内直接使用
-- 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=opencode-tui`
-- 🔒 **数据隔离**：独立系统用户 `opencode-tui`，数据存于 `/vol4/@appdata/opencode-tui/`
+- 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=oc`
+- 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/oc/`
 - 🗂️ **XDG 目录隔离**：`XDG_DATA_HOME` / `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_STATE_HOME`
   全部指向应用数据目录，避免写入 NAS 上不可写的 `$HOME/.local/share`
-- 🤝 **可与其他版本共存**：`appname=opencode-tui`，端口 **19282**，与 mimocode(19280/19281) 互不冲突
+- 🤝 **可与其他版本共存**：`appname=oc`，端口 **19282**，与 mimocode(19280/19281) 互不冲突
 - 📜 **安装协议授权向导**：首次安装需勾选同意 7 项条款（非官方/版权/担保/风险/权限/网络/许可）
 - 🎨 **品牌化**：OpenCode 图标（64/128/256 三档）+ 固定页面标题 `OpenCode`
 - 🧭 **不写死卷路径**：`cmd/_lib.sh` 自动推导数据目录，兼容不同 fnOS 部署布局

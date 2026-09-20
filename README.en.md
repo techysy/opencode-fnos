@@ -54,7 +54,7 @@ This project packages the **official unmodified TUI** as a fnOS app:
 | :--- | :--- |
 | ✅ Official TUI | Uses the official `opencode` binary |
 | ✅ Desktop integration | One-click icon, embedded via iframe |
-| ✅ Data isolation | Dedicated user `opencode-tui`, data in `/vol4/@appdata/opencode-tui/` |
+| ✅ Data isolation | Dedicated user `oc`, data in `/vol4/@appdata/oc/` |
 | ✅ XDG isolation | config/data/cache/state all inside the app data dir |
 | ✅ Coexists with others | Own appname, port 19282 |
 | ✅ Clipboard fix | Fixes ttyd copy inside iframes |
@@ -69,7 +69,18 @@ This project packages the **official unmodified TUI** as a fnOS app:
 
 Then click **OpenCode TUI** on the fnOS desktop.
 
-> `appname` is `opencode-tui`, so it does not conflict with other versions.
+### 🌐 Short URL
+
+Like `dsh`, the app uses a 2-letter `appname`, so it is reachable at a short URL:
+
+```
+http://oc.techysy.fnos.net/
+```
+
+> The domain is wildcarded (`*.techysy.fnos.net`); routing is based on the
+> `appname` registered with the fnOS portal.
+
+> `appname` is `oc`, so it does not conflict with other versions.
 
 ## Usage
 
@@ -79,7 +90,7 @@ Configure model credentials on first run:
 opencode providers
 ```
 
-The default workspace is `/vol4/@appdata/opencode-tui/workspace`. Point it at your own repo:
+The default workspace is `/vol4/@appdata/oc/workspace`. Point it at your own repo:
 
 ```bash
 export OPENCODE_WORKSPACE=/vol1/1000/your-project

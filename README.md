@@ -52,7 +52,7 @@
 | :--- | :--- |
 | ✅ 官方原版 TUI | 使用官方 `opencode` 二进制，非重制界面 |
 | ✅ 飞牛桌面集成 | 桌面图标一键打开，iframe 内嵌 |
-| ✅ 数据隔离 | 独立用户 `opencode-tui`，数据存于 `/vol4/@appdata/opencode-tui/` |
+| ✅ 数据隔离 | 独立用户 `oc`，数据存于 `/vol4/@appdata/oc/` |
 | ✅ XDG 全隔离 | config/data/cache/state 全部落在应用数据目录 |
 | ✅ 可与其他版本共存 | appname 独立，端口 19282 |
 | ✅ 剪贴板修复 | 修复 ttyd 在 iframe 中复制失效的问题 |
@@ -67,7 +67,18 @@
 
 安装后从飞牛桌面点击 **OpenCode TUI** 图标即可。
 
-> ⚠️ 安装需知：应用的 `appname` 为 `opencode-tui`，与其它版本互不冲突，可同时安装。
+### 🌐 短地址访问
+
+与 `dsh` 一样，应用的 `appname` 为 2 个字母，因此可用短地址直接访问：
+
+```
+http://oc.techysy.fnos.net/
+```
+
+> 域名是通配的（`*.techysy.fnos.net`），实际路由由 fnOS 门户按 `appname` 匹配。
+> 也可以用应用中心旁的启动图标（iframe）。
+
+> ⚠️ 安装需知：应用的 `appname` 为 `oc`，与其它版本互不冲突，可同时安装。
 
 ## 使用
 
@@ -78,10 +89,10 @@
 opencode providers
 ```
 
-工作目录默认为 `/vol4/@appdata/opencode-tui/workspace`。要指向自己的代码仓库：
+工作目录默认为 `/vol4/@appdata/oc/workspace`。要指向自己的代码仓库：
 
 ```bash
-# 编辑 /var/apps/opencode-tui/cmd/main，或设置环境变量
+# 编辑 /var/apps/oc/cmd/main，或设置环境变量
 export OPENCODE_WORKSPACE=/vol1/1000/你的项目
 ```
 
@@ -98,7 +109,7 @@ opencode-fnos/
 │   ├── upgrade_callback  # 升级后重启服务
 │   └── uninstall_callback
 ├── config/
-│   ├── privilege         # 独立运行用户 opencode-tui
+│   ├── privilege         # 独立运行用户 oc
 │   └── resource          # 数据卷权限声明
 ├── app/
 │   ├── bin/              # opencode（引擎）+ ttyd（网关），构建时注入

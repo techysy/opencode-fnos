@@ -1,6 +1,6 @@
 {
   ".url": {
-    "opencode-tui.Application": {
+    "oc.Application": {
       "title": "OpenCode TUI",
       "icon": "images/icon_{0}.png",
       "type": "iframe",

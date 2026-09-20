@@ -1,6 +1,6 @@
 # 问题排查 / Troubleshooting
 
-端口默认 **19282**，数据目录默认 **/vol4/@appdata/opencode-tui/**。
+端口默认 **19282**，数据目录默认 **/vol4/@appdata/oc/**。
 以下命令按需替换端口/目录。
 
 ## 安装相关
@@ -23,11 +23,11 @@
    ```
 3. 查看日志：
    ```bash
-   tail -n 50 /vol4/@appdata/opencode-tui/opencode-tui.log
+   tail -n 50 /vol4/@appdata/oc/oc.log
    ```
 4. 手动拉起：
    ```bash
-   /var/apps/opencode-tui/cmd/main restart
+   /var/apps/oc/cmd/main restart
    ```
 
 ### 端口 19282 被占用
@@ -52,10 +52,10 @@ ss -tlnp | grep 19282
 若你是手动直接运行引擎而报此错，请自行指定：
 
 ```bash
-export XDG_DATA_HOME=/vol4/@appdata/opencode-tui/share
-export XDG_CONFIG_HOME=/vol4/@appdata/opencode-tui/config
-export XDG_CACHE_HOME=/vol4/@appdata/opencode-tui/cache
-export XDG_STATE_HOME=/vol4/@appdata/opencode-tui/state
+export XDG_DATA_HOME=/vol4/@appdata/oc/share
+export XDG_CONFIG_HOME=/vol4/@appdata/oc/config
+export XDG_CACHE_HOME=/vol4/@appdata/oc/cache
+export XDG_STATE_HOME=/vol4/@appdata/oc/state
 ```
 
 ## 使用相关
@@ -93,11 +93,11 @@ ttyd 是**懒启动**：只有客户端连上来才会 fork 引擎子进程。
 ### 如何把工作目录指向我的代码仓库
 
 ```bash
-sudo -u opencode-tui OPENCODE_WORKSPACE=/vol1/1000/my-project \
-  /var/apps/opencode-tui/cmd/main restart
+sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
+  /var/apps/oc/cmd/main restart
 ```
 
-或编辑 `/var/apps/opencode-tui/cmd/main`，修改 `WORKSPACE` 默认值。
+或编辑 `/var/apps/oc/cmd/main`，修改 `WORKSPACE` 默认值。
 
 > 引擎拒绝把 `/` 当作项目目录，请务必指向一个具体目录。
 
@@ -105,13 +105,13 @@ sudo -u opencode-tui OPENCODE_WORKSPACE=/vol1/1000/my-project \
 
 | 项 | 路径 |
 | :--- | :--- |
-| 应用数据根 | `/vol4/@appdata/opencode-tui/` |
-| 工作目录 | `/vol4/@appdata/opencode-tui/workspace` |
-| 配置 | `/vol4/@appdata/opencode-tui/config` |
-| 数据 | `/vol4/@appdata/opencode-tui/share` |
-| 缓存 | `/vol4/@appdata/opencode-tui/cache` |
-| 状态 | `/vol4/@appdata/opencode-tui/state` |
-| 日志 | `/vol4/@appdata/opencode-tui/opencode-tui.log` |
+| 应用数据根 | `/vol4/@appdata/oc/` |
+| 工作目录 | `/vol4/@appdata/oc/workspace` |
+| 配置 | `/vol4/@appdata/oc/config` |
+| 数据 | `/vol4/@appdata/oc/share` |
+| 缓存 | `/vol4/@appdata/oc/cache` |
+| 状态 | `/vol4/@appdata/oc/state` |
+| 日志 | `/vol4/@appdata/oc/oc.log` |
 
 ## 构建相关
 
@@ -160,8 +160,8 @@ node scripts/check-web-syntax.js app/web/index.html
 
 飞牛 → 应用中心 → OpenCode TUI → 卸载。
 
-数据目录 `/vol4/@appdata/opencode-tui/` 默认保留，如需彻底清理：
+数据目录 `/vol4/@appdata/oc/` 默认保留，如需彻底清理：
 
 ```bash
-rm -rf /vol4/@appdata/opencode-tui/
+rm -rf /vol4/@appdata/oc/
 ```
