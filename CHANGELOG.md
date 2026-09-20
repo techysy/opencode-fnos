@@ -13,6 +13,7 @@
 - 🖥️ **官方原版 TUI**：直接使用官方 `opencode` 二进制的 TUI（终端界面），**未重制界面**
 - 🌐 **网页终端接入**：通过 ttyd 1.7.7 把 TUI 包装为网页终端，飞牛桌面 iframe 内直接使用
 - 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=oc`
+- 🌐 **短地址访问**：`appname` 为 `oc`，可用 <http://oc.techysy.fnos.net/> 直接访问
 - 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/oc/`
 - 🗂️ **XDG 目录隔离**：`XDG_DATA_HOME` / `XDG_CONFIG_HOME` / `XDG_CACHE_HOME` / `XDG_STATE_HOME`
   全部指向应用数据目录，避免写入 NAS 上不可写的 `$HOME/.local/share`
