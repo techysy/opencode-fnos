@@ -188,8 +188,9 @@ jobs:
           rm -f ./*.fpk
           fnpack build -d .
           VERSION="${{ needs.prepare.outputs.version }}"
+          APPNAME="$(sed -n 's/^appname[[:space:]]*=[[:space:]]*\([^[:space:]]*\)/\1/p' manifest | head -1)"
           OUT="opencode-tui-${VERSION}-${{ matrix.arch }}.fpk"
-          mv opencode-tui.fpk "$OUT"
+          mv "${APPNAME}.fpk" "$OUT"
           mkdir -p dist && mv "$OUT" dist/
           ls -lh "dist/$OUT"
 
