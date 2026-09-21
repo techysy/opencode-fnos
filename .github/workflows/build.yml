@@ -85,10 +85,11 @@ jobs:
           ldd --version > /tmp/ldd.txt 2>&1 || true
           sed -n '1p' /tmp/ldd.txt
 
-      # 不指定版本：setup-bun 会读仓库 package.json 的 packageManager（bun@1.3.14），
-      # 与上游构建脚本要求的版本保持一致
+      # v2 上游 package.json 要求 bun@1.4.2，必须与之一致，否则构建脚本会拒绝运行
       - name: 安装 Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
 
       - name: 下载 fnpack（官方源 + SHA256 校验）
         env:
@@ -132,10 +133,10 @@ jobs:
 
           # build 脚本需要分支信息，tarball 不含 .git
           git init -q .
-          cd packages/opencode
-          # 不传 --skip-install：build.ts 会用 --os="*" --cpu="*" 拉取
-          # @opentui/core 与 @parcel/watcher 的全平台原生二进制，
-          # 缺了这些单文件编译会失败。
+          # v2 的构建入口已从 packages/opencode 移到 packages/cli
+          cd packages/cli
+          # 不传 --skip-install：build.ts 会拉取 @opentui/core 与 @parcel/watcher
+          # 的全平台原生二进制，缺了单文件编译会失败。
           OPENCODE_CHANNEL=local OPENCODE_VERSION=local \
             bun run script/build.ts --single
 
@@ -145,7 +146,7 @@ jobs:
             x86_64|amd64)  EXPECT_ARCH="x64" ;;
             *) echo "::error::未知 runner 架构 $(uname -m)"; exit 1 ;;
           esac
-          TARGET="opencode-linux-${EXPECT_ARCH}"
+          TARGET="cli-linux-${EXPECT_ARCH}"
           [ -x "dist/${TARGET}/bin/opencode" ] || {
             echo "::error::未找到 dist/${TARGET}/bin/opencode，实际产物："
             ls -d dist/*/ 2>/dev/null || true
@@ -154,15 +155,6 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/app/bin"
           cp "dist/${TARGET}/bin/opencode" "$GITHUB_WORKSPACE/app/bin/opencode"
           ls -lh "$GITHUB_WORKSPACE/app/bin/opencode"
-
-      - name: 下载 ttyd
-        run: |
-          set -euo pipefail
-          if [ "${{ matrix.arch }}" = "arm" ]; then TTYD="ttyd.aarch64"; else TTYD="ttyd.x86_64"; fi
-          curl -fsSL -o "$GITHUB_WORKSPACE/app/bin/ttyd" \
-            "https://github.com/tsl0922/ttyd/releases/download/1.7.7/${TTYD}"
-          chmod +x "$GITHUB_WORKSPACE/app/bin/ttyd"
-          file "$GITHUB_WORKSPACE/app/bin/ttyd" || true
 
       - name: 设置 manifest platform + 同步版本
         run: |
@@ -212,9 +204,11 @@ jobs:
           done
 
           echo "── 二进制 ──"
-          for f in bin/opencode bin/ttyd; do
-            grep -qx "$f" /tmp/app-list.txt || { echo "::error::缺 $f"; exit 1; }
-          done
+          # v2 只需 opencode（自带 Web UI，不再用 ttyd）
+          grep -qx "bin/opencode" /tmp/app-list.txt || { echo "::error::缺 bin/opencode"; exit 1; }
+          if grep -qx "bin/ttyd" /tmp/app-list.txt; then
+            echo "::error::v2 不应包含 bin/ttyd"; exit 1
+          fi
 
           echo "── 生命周期脚本 ──"
           for f in main install_init install_callback uninstall_init uninstall_callback \
@@ -228,12 +222,24 @@ jobs:
           HC=$(grep -rn "/vol4" /tmp/ci-cmd/cmd/ 2>/dev/null | grep -vE ":[0-9]+: *#" || true)
           [ -z "$HC" ] || { echo "$HC"; echo "::error::代码含硬编码 /vol4"; exit 1; }
 
-          echo "── 页面脚本语法（白屏防护）──"
-          # app/web/index.html 由 ttyd 官方页面字符串替换而来。
-          # 替换若破坏压缩 JS，浏览器会 SyntaxError 导致整页白屏，
-          # 而 HTTP / WebSocket 全部正常，极难排查。此处强制静态校验。
-          mkdir -p /tmp/ci-web && tar -xzf /tmp/app.tgz -C /tmp/ci-web web
-          node scripts/check-web-syntax.js /tmp/ci-web/web/index.html
+          echo "── ui/config 的 auth_token 与内置密码一致 ──"
+          # v2 默认强制鉴权；飞牛桌面 iframe 发不了 Basic 头，靠 url 里的
+          # ?auth_token=<base64(user:pass)> 通过。若 token 与 cmd/main 的
+          # 内置密码不一致，页面会 401 白屏且无任何日志线索，故强制校验。
+          mkdir -p /tmp/ci-ui && tar -xzf /tmp/app.tgz -C /tmp/ci-ui ui
+          python3 - <<'PYEOF'
+          import base64, json, re
+          cfg = json.load(open("/tmp/ci-ui/ui/config"))
+          url = cfg[".url"]["oc.Application"]["url"]
+          m = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url)
+          assert m, "app/ui/config 的 url 缺少 auth_token"
+          user, pw = base64.b64decode(m.group(1)).decode().split(":", 1)
+          main = open("/tmp/ci-cmd/cmd/main", encoding="utf-8").read()
+          mm = re.search(r"OPENCODE_SERVER_PASSWORD:-([^}]*)", main)
+          assert mm, "cmd/main 未找到内置密码"
+          assert pw == mm.group(1), "token 密码(%s) 与内置密码(%s) 不一致" % (pw, mm.group(1))
+          print("  auth_token OK（用户 %s）" % user)
+          PYEOF
 
           echo "── 架构校验（ELF e_machine，小端序）──"
           mkdir -p /tmp/ci-bin && tar -xzf /tmp/app.tgz -C /tmp/ci-bin bin/opencode

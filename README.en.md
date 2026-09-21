@@ -1,6 +1,6 @@
-# OpenCode TUI for fnOS
+# OpenCode for fnOS
 
-Bring **OpenCode**'s official TUI to your fnOS NAS — click the desktop icon and start using it.
+Bring **OpenCode** to your fnOS NAS — click the desktop icon and start using it.
 
 | | |
 | :--- | :--- |
@@ -8,7 +8,7 @@ Bring **OpenCode**'s official TUI to your fnOS NAS — click the desktop icon an
 | **Publisher** | [techysy](https://github.com/techysy/opencode-fnos) (fnOS packaging) |
 
 > This project only **packages and adapts** OpenCode for fnOS. The engine is built from
-> the official source with 3 minimal adaptation patches applied.
+> the official source with **1** minimal adaptation patch applied.
 > Upstream: <https://github.com/anomalyco/opencode>
 
 [![Release](https://img.shields.io/github/v/release/techysy/opencode-fnos.svg?label=Latest&color=blue)](https://github.com/techysy/opencode-fnos/releases)
@@ -31,47 +31,45 @@ Pick the package matching your NAS CPU architecture:
 | x86_64 | `opencode-tui-<version>-x86.fpk` | Most Intel / AMD models |
 | arm64 | `opencode-tui-<version>-arm.fpk` | ARM models |
 
-> Current: **v1.18.31** — bundles the official OpenCode v1.18.31 engine
+> Current: **v2.0.12** — bundles the official OpenCode v2.0.12 engine
+>
+> The `opencode-tui-` filename prefix is kept for download continuity; the internal
+> app identifier is `oc`.
 
 ---
 
 ## What is this
 
-[OpenCode](https://github.com/anomalyco/opencode) is an open-source AI coding assistant
-(terminal TUI + Web UI).
+[OpenCode](https://github.com/anomalyco/opencode) is an open-source AI coding assistant.
 
-This project packages the **official unmodified TUI** as a fnOS app:
+This project packages the **official OpenCode** as a fnOS app:
 
-- **Engine**: official OpenCode v1.18.31 (built from official source)
-- **UI**: the official TUI, wrapped as a web terminal by [ttyd](https://github.com/tsl0922/ttyd)
-- **Entry**: fnOS desktop icon / browser
+- **Engine**: official OpenCode v2.0.12 (built from official source, 1 minimal patch)
+- **UI**: the **official native Web UI** (Solid.js SPA), served by the engine's built-in `opencode serve`
+- **Entry**: fnOS desktop icon (iframe) / browser
 
-**No UI was rewritten** — what you see is the official TUI itself.
+**No UI was rewritten** — what you see is the official Web UI itself.
+
+> **About v1**: v1.18.x used "TUI + ttyd web terminal", now deprecated.
+> Since v2 the app uses the official native Web UI, so **ttyd is no longer needed**
+> and the UI is no longer maintained by this project.
 
 ## Features
 
 | Feature | Description |
 | :--- | :--- |
-| ✅ Official TUI | Uses the official `opencode` binary |
-| ✅ Desktop integration | One-click icon, embedded via iframe |
+| ✅ Official native Web UI | Solid.js SPA built upstream, follows upstream automatically |
+| ✅ Desktop integration | One-click icon, embedded via iframe (cross-origin + auth handled) |
 | ✅ Data isolation | Dedicated user `oc`, data in `/vol4/@appdata/oc/` |
 | ✅ XDG isolation | config/data/cache/state all inside the app data dir |
-| ✅ Coexists with others | Own appname, port 19282 |
-| ✅ Clipboard fix | Fixes ttyd copy inside iframes |
-| ✅ Branded | OpenCode icon + fixed page title |
-| ✅ No hardcoded volumes | Data dir is derived at runtime |
+| ✅ Coexists with others | Own appname (`oc`), port 19282 |
+| ✅ SSE for realtime | Event stream uses Server-Sent Events (iframe/proxy friendly) |
+| ✅ Branding | OpenCode icon + desktop title |
+| ✅ No hardcoded volume paths | Data dir derived at runtime |
 
-## Install
+## 🌐 Short URL
 
-1. Download the `.fpk` for your architecture
-2. fnOS → **App Center** → top-right **Manual Install** → pick the `.fpk`
-3. Accept the license in the install wizard to finish
-
-Then click **OpenCode TUI** on the fnOS desktop.
-
-### 🌐 Short URL
-
-Like `dsh`, the app uses a 2-letter `appname`, so it is reachable at a short URL:
+The app registers the 2-letter `appname` `oc`, so it is reachable at a short URL:
 
 ```
 http://oc.techysy.fnos.net/
@@ -80,67 +78,97 @@ http://oc.techysy.fnos.net/
 > The domain is wildcarded (`*.techysy.fnos.net`); routing is based on the
 > `appname` registered with the fnOS portal.
 
-> `appname` is `oc`, so it does not conflict with other versions.
+## Install
+
+1. Download the `.fpk` matching your architecture
+2. fnOS → **App Center** → top-right **Manual Install** → choose the file
+3. Accept the license → install
+4. Click the **OpenCode** icon on the fnOS desktop
+
+### CLI install
+
+```bash
+# SSH into the NAS (root required)
+appcgi install /path/to/opencode-tui-2.0.12-x86.fpk
+```
+
+---
 
 ## Usage
 
-Configure model credentials on first run:
+Then click **OpenCode** on the fnOS desktop.
+
+### Workspace
+
+The default workspace is `/vol4/@appdata/oc/workspace`. To point it at your own repo:
 
 ```bash
-opencode providers
+sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
+  /var/apps/oc/cmd/main restart
 ```
 
-The default workspace is `/vol4/@appdata/oc/workspace`. Point it at your own repo:
+Or edit `/var/apps/oc/cmd/main` and change the `WORKSPACE` default.
+
+### Service management
 
 ```bash
-export OPENCODE_WORKSPACE=/vol1/1000/your-project
+/var/apps/oc/cmd/main {start|stop|status|restart}
 ```
 
-## Build
+---
 
-```bash
-# Full build (fetch source → patch → install deps → compile engine → pack)
-bash scripts/build.sh --from-source
+## Upstream adaptation
 
-# Pack only (when app/bin/opencode already exists)
-bash scripts/build.sh
-
-# arm64
-ARCH=arm bash scripts/build.sh --from-source
-```
-
-> Requires `fnpack` >= 1.2.4, `bun` >= 1.3.0, `patch`, `curl`, `node`
-
-## Tracking upstream
-
-```bash
-bash scripts/check-upstream.sh          # check for a new release
-bash scripts/check-upstream.sh --apply  # bump VERSION + manifest
-git commit -am "chore: bump upstream to vX.Y.Z"
-git tag vX.Y.Z && git push origin master --tags
-```
-
-You can also run **Actions → Build OpenCode TUI fpk → Run workflow** manually.
-
-## Changes to upstream
-
-Only **minimal adaptations** are applied
-(see [`docs/patches/fnos-adaptation.patch`](docs/patches/fnos-adaptation.patch)):
+Only **one** change, see [`docs/patches/fnos-adaptation.patch`](docs/patches/fnos-adaptation.patch):
 
 | File | Change | Reason |
 | :--- | :--- | :--- |
-| `packages/script/src/index.ts` | Relax bun version to `>=1.3.0` | Build env compatibility |
-| `server/shared/ui.ts` | CSP adds `frame-ancestors *` and `ws:`/`wss:` | iframe + WebSocket |
-| `server/shared/public-ui.ts` | Static assets bypass auth | Page loads inside iframe |
+| `packages/cli/src/services/web-ui.ts` | CSP gains `frame-ancestors *` | Allow embedding via the **cross-origin** fnOS desktop iframe |
 
-**Engine logic itself is untouched.**
+**No engine logic was modified.**
 
-## Disclaimer
+### Authentication
 
-- This is an **unofficial third-party adaptation**, not affiliated with the OpenCode team
-- OpenCode is MIT licensed; copyright belongs to its original authors
-- The engine binary is built from official source with only the minimal patches above
+v2 enforces auth by default (a random password is generated if unset). The fnOS desktop
+embeds via `<iframe>`, which **cannot send a Basic auth header**, therefore:
+
+- `cmd/main` embeds a fixed password (override with `OPENCODE_PASSWORD`)
+- `app/ui/config`'s `url` carries `?auth_token=<base64(opencode:password)>`
+
+> These two must match, otherwise the page shows a **401 blank screen**. Both the build
+> script and CI enforce this.
+
+---
+
+## Build from source
+
+Requires **bun 1.4.2+** (v2 upstream requirement) and **fnpack 1.2.4+**.
+
+```bash
+# Build the engine from official source (fetch, patch, compile)
+bash scripts/build.sh --from-source
+
+# Package using an existing app/bin/opencode
+bash scripts/build.sh
+
+# Specific architecture
+ARCH=arm bash scripts/build.sh
+```
+
+Output goes to `dist/` and is delivered to `/vol1/1000/fnOS App/fpk/opencode`.
+
+## Upstream updates
+
+```bash
+bash scripts/check-upstream.sh            # check (looks at both releases and tags)
+bash scripts/check-upstream.sh --apply    # update VERSION + manifest automatically
+```
+
+> Since v2 upstream **only pushes tags, no releases** — the script queries both.
+
+---
 
 ## License
 
-[MIT](LICENSE) — original OpenCode copyright notices retained
+Unofficial packaging, released under [MIT](LICENSE).
+OpenCode is copyright [anomalyco](https://github.com/anomalyco/opencode).

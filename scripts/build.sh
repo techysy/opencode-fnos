@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# OpenCode TUI 飞牛打包脚本 — fnpack build + 交付
+# OpenCode 飞牛打包脚本 — fnpack build + 交付
 #
 # 用法（在项目根目录运行）：
 #   bash scripts/build.sh                          # 用当前 app/bin 二进制直接打包
 #   BUILD_AUTO=1 bash scripts/build.sh             # 跳过确认（CI 用）
 #   bash scripts/build.sh --from-source            # 从源码全量构建引擎
-#   UPSTREAM_VERSION=1.18.32 bash scripts/build.sh --from-source
+#   UPSTREAM_VERSION=2.0.13 bash scripts/build.sh --from-source
 #
 # 前置条件：
 #   - app/bin/opencode  官方引擎二进制（--from-source 时自动构建）
-#   - app/bin/ttyd      Web 终端网关（缺失时自动下载）
+#   - bun 1.4.2+        v2 必需（可用 BUN_BIN 指定路径）
 #   - fnpack >= 1.2.4
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FPK_DIR="${FPK_DELIVER_DIR:-/vol1/1000/fnOS App/fpk/opencode}"
 OLDFPK_DIR="${FPK_OLD_DIR:-/vol1/1000/fnOS App/fpk/oldfpk}"
-UPSTREAM_VERSION="${UPSTREAM_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 1.18.31)}"
+UPSTREAM_VERSION="${UPSTREAM_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 2.0.12)}"
 ARCH="${ARCH:-x86}"
 
 # ARCH 决定：上游构建目标目录 + manifest 的 platform 字段
 # 注意：fnOS 只接受 x86 / arm / loongarch / risc-v / all
 case "$ARCH" in
-    x86|x86_64) BIN_ARCH="linux-x64";   PLATFORM="x86"; TTYD_ASSET="ttyd.x86_64" ;;
-    arm|arm64)  BIN_ARCH="linux-arm64"; PLATFORM="arm"; TTYD_ASSET="ttyd.aarch64" ;;
+    x86|x86_64) BIN_ARCH="linux-x64";   PLATFORM="x86" ;;
+    arm|arm64)  BIN_ARCH="linux-arm64"; PLATFORM="arm" ;;
     *) echo "ERROR: 不支持的架构 $ARCH（可选 x86 / arm）" >&2; exit 1 ;;
 esac
 
@@ -42,17 +42,20 @@ if [ "${1:-}" = "--from-source" ]; then
     (cd "$WORK/src" && patch -p1 --forward < "$ROOT/docs/patches/fnos-adaptation.patch")
 
     echo "--- 安装依赖 ---"
-    (cd "$WORK/src" && bun install --ignore-scripts)
+    (cd "$WORK/src" && \
+        BUN_TMPDIR="$WORK/tmp" BUN_INSTALL_CACHE_DIR="$WORK/bun-cache" \
+        "${BUN_BIN:-bun}" install --ignore-scripts)
 
     echo "--- 构建引擎（内嵌 Web UI） ---"
     # 用 git init 提供 build 脚本需要的分支信息（tarball 不含 .git）
     (cd "$WORK/src" && git init -q . 2>/dev/null || true)
-    (cd "$WORK/src/packages/opencode" && \
+    (cd "$WORK/src/packages/cli" && \
         OPENCODE_CHANNEL=local OPENCODE_VERSION=local \
-        bun run script/build.ts --single --skip-install)
+        BUN_TMPDIR="$WORK/tmp" BUN_INSTALL_CACHE_DIR="$WORK/bun-cache" \
+        "${BUN_BIN:-bun}" run script/build.ts --single --skip-install)
 
     mkdir -p "$ROOT/app/bin"
-    cp "$WORK/src/packages/opencode/dist/opencode-${BIN_ARCH}/bin/opencode" "$ROOT/app/bin/opencode"
+    cp "$WORK/src/packages/cli/dist/cli-${BIN_ARCH}/bin/opencode" "$ROOT/app/bin/opencode"
     echo "✓ 引擎已构建（${BIN_ARCH}）"
 fi
 
@@ -64,13 +67,6 @@ if [ ! -x "$ROOT/app/bin/opencode" ]; then
     exit 1
 fi
 
-if [ ! -x "$ROOT/app/bin/ttyd" ]; then
-    echo "ℹ️  ttyd 缺失，自动下载..."
-    curl -fL --retry 3 -o "$ROOT/app/bin/ttyd" \
-        "https://github.com/tsl0922/ttyd/releases/download/1.7.7/${TTYD_ASSET}"
-    chmod +x "$ROOT/app/bin/ttyd"
-    echo "✓ ttyd 已下载"
-fi
 chmod +x "$ROOT/app/bin/"* 2>/dev/null || true
 
 # --- 同步版本号与 platform ---
@@ -82,14 +78,29 @@ else
 fi
 echo "✓ platform = ${PLATFORM}"
 
-echo "📦 即将打包：opencode-tui v${UPSTREAM_VERSION} (${PLATFORM})"
+echo "📦 即将打包：oc v${UPSTREAM_VERSION} (${PLATFORM})"
 
-# --- 页面脚本语法校验 ---
-# app/web/index.html 由 ttyd 官方页面字符串替换而来。替换若破坏压缩 JS，
-# 浏览器会 SyntaxError 导致整页白屏，而 HTTP / WebSocket 全正常，极难排查。
-if [ -f "$ROOT/app/web/index.html" ]; then
-    node "$ROOT/scripts/check-web-syntax.js" "$ROOT/app/web/index.html" \
-        || { echo "ERROR: 页面脚本语法校验失败" >&2; exit 1; }
+# --- 校验：ui/config 的 auth_token 必须与 cmd/main 的内置密码一致 ---
+# 二者不一致会导致飞牛桌面 iframe 打开后 401（白屏），且没有任何日志线索。
+if [ -f "$ROOT/app/ui/config" ]; then
+    python3 - "$ROOT" <<'PYEOF'
+import base64, json, re, sys, os
+root = sys.argv[1]
+cfg = json.load(open(os.path.join(root, "app/ui/config")))
+url = cfg[".url"]["oc.Application"]["url"]
+m = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url)
+if not m:
+    sys.exit("ERROR: app/ui/config 的 url 缺少 auth_token")
+decoded = base64.b64decode(m.group(1)).decode()
+user, pw = decoded.split(":", 1)
+main = open(os.path.join(root, "cmd/main"), encoding="utf-8").read()
+mm = re.search(r"OPENCODE_SERVER_PASSWORD:-([^}]*)", main)
+if not mm:
+    sys.exit("ERROR: cmd/main 未找到内置密码")
+if pw != mm.group(1):
+    sys.exit("ERROR: ui/config 的 token 密码(%s) 与 cmd/main 内置密码(%s) 不一致" % (pw, mm.group(1)))
+print("✓ auth_token 与内置密码一致")
+PYEOF
 fi
 
 if [ "${BUILD_AUTO:-0}" != "1" ]; then

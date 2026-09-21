@@ -1,12 +1,12 @@
 {
   ".url": {
     "oc.Application": {
-      "title": "OpenCode TUI",
+      "title": "OpenCode",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "http",
       "port": "19282",
-      "url": "/",
+      "url": "/?auth_token=b3BlbmNvZGU6b2MtZm5vcw==",
       "allUsers": true
     }
   }

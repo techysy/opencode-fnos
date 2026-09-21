@@ -1,8 +1,9 @@
 #!/bin/bash
-# OpenCode TUI — 启停控制
+# OpenCode 飞牛版 — 启停控制
 # 用法：main {start|stop|status|restart}
 #
-# 说明：本脚本不写死卷路径，数据目录由 _lib.sh 推导
+# v2 架构：不再使用 ttyd，直接运行 `opencode serve`（自带原生 Web UI）。
+# 本脚本不写死卷路径，数据目录由 _lib.sh 推导。
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -14,28 +15,36 @@ opencode_resolve_appdir
 PORT="${TRIM_SERVICE_PORT:-19282}"
 PID_FILE="${DATA_DIR}/oc.pid"
 
-# TUI 工作目录（用户的代码仓库）。引擎拒绝把 / 当作项目目录。
-# 默认隔离在本应用数据目录下，避免与其他版本冲突。
+# 工作目录（用户的代码仓库）。引擎拒绝把 / 当作项目目录。
 WORKSPACE="${OPENCODE_WORKSPACE:-${DATA_DIR}/workspace}"
 
 OPENCODE_BIN="${REAL_APP_DIR}/bin/opencode"
-TTYD_BIN="${REAL_APP_DIR}/bin/ttyd"
-WEB_INDEX="${REAL_APP_DIR}/web/index.html"
 
 log() { echo "[$(date '+%F %T')] $*" >> "${LOG}" 2>&1; }
 
+# ---------------------------------------------------------------------------
+# 服务密码
+#
+# v2 默认强制鉴权：未设密码时会随机生成，导致整站 401。
+# 飞牛桌面用 iframe 嵌入且无法发送 Basic 头，因此这里固定一个密码，
+# 并在 app/ui/config 的 url 中带上 ?auth_token=<base64(user:pass)>。
+# 用户名固定为 opencode（见 packages/server/src/auth.ts）。
+# ---------------------------------------------------------------------------
+# 固定密码：app/ui/config 的 url 已内置 ?auth_token=<base64(opencode:此密码)>，
+# 两者必须一致，否则飞牛桌面 iframe 会 401。
+PASSWORD="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-oc-fnos}}"
+
+# 高级用法：可用数据目录下的 .password 覆盖（此时需同步修改 ui/config 的 token）
+PASSWORD_FILE="${DATA_DIR}/.password"
+[ -f "${PASSWORD_FILE}" ] && PASSWORD="$(cat "${PASSWORD_FILE}")"
+
 start() {
     mkdir -p "${DATA_DIR}" "${WORKSPACE}" 2>/dev/null
-    log "=== start ==="
+    log "=== start (v2 serve) ==="
 
     if [ ! -x "${OPENCODE_BIN}" ]; then
         echo "ERROR: 缺少可执行文件 ${OPENCODE_BIN}" >&2
         log "ERROR: opencode not executable at ${OPENCODE_BIN}"
-        return 1
-    fi
-    if [ ! -x "${TTYD_BIN}" ]; then
-        echo "ERROR: 缺少可执行文件 ${TTYD_BIN}" >&2
-        log "ERROR: ttyd not executable at ${TTYD_BIN}"
         return 1
     fi
 
@@ -46,7 +55,7 @@ start() {
     fi
 
     # 清理残留进程与陈旧 PID
-    pkill -f "ttyd -p ${PORT}" 2>/dev/null || true
+    pkill -f "opencode serve .*--port ${PORT}" 2>/dev/null || true
     rm -f "${PID_FILE}"
     sleep 1
 
@@ -54,48 +63,40 @@ start() {
     opencode_resolve_xdg
     export TERM="xterm-256color"
     export HOME="${DATA_DIR}"
+    export OPENCODE_PASSWORD="${PASSWORD}"
+    # 禁止自更新：应用由 fpk 管理，引擎不应自我改写
+    export OPENCODE_DISABLE_AUTOUPDATE=1
 
-    log "starting TUI on 0.0.0.0:${PORT} (workspace=${WORKSPACE})"
+    log "starting serve on 0.0.0.0:${PORT} (workspace=${WORKSPACE})"
 
-    # 引擎拒绝以 / 作为项目目录，必须先切到工作区
     cd "${WORKSPACE}" || {
         echo "ERROR: 无法进入工作目录 ${WORKSPACE}" >&2
         log "ERROR: cannot cd to ${WORKSPACE}"
         return 1
     }
 
-    # 构建 ttyd 参数；自定义页面存在时才用 -I
-    TTYD_ARGS=(
-        -p "${PORT}"
-        -i "0.0.0.0"
-        -W
-        -t "fontSize=14"
-        -t "scrollback=10000"
-        -t "titleFixed=true"
-    )
-    [ -f "${WEB_INDEX}" ] && TTYD_ARGS+=(-I "${WEB_INDEX}")
-
-    nohup "${TTYD_BIN}" "${TTYD_ARGS[@]}" -- "${OPENCODE_BIN}" >> "${LOG}" 2>&1 < /dev/null &
+    # serve 默认即独立服务器，无需 --standalone
+    nohup "${OPENCODE_BIN}" serve \
+        --hostname 0.0.0.0 \
+        --port "${PORT}" \
+        >> "${LOG}" 2>&1 < /dev/null &
     PID=$!
     echo "${PID}" > "${PID_FILE}"
 
-    # 健康检查：ttyd 存活 + HTTP 200 即视为启动成功。
-    #
-    # 注意：ttyd 是「懒启动」——只有客户端连上来（打开终端页面）才会
-    # fork 引擎子进程。因此这里不能要求引擎子进程存在，否则
-    # install_callback 里不带客户端调用 start 会误判失败。
+    # 健康检查：进程存活 + HTTP 响应即视为启动成功
     local code=""
-    for _ in $(seq 1 20); do
+    for _ in $(seq 1 30); do
         if ! kill -0 "${PID}" 2>/dev/null; then
-            echo "ERROR: ttyd 启动后立即退出，见 ${LOG}" >&2
-            log "ERROR: ttyd exited during startup"
+            echo "ERROR: 服务启动后立即退出，见 ${LOG}" >&2
+            log "ERROR: serve exited during startup"
             rm -f "${PID_FILE}"
             return 1
         fi
         code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null)"
-        if [ "${code}" = "200" ]; then
+        # 401 表示服务已就绪（只是需要凭据），同样算启动成功
+        if [ "${code}" = "200" ] || [ "${code}" = "401" ]; then
             echo "started (pid ${PID}, port ${PORT})"
-            log "started OK (pid ${PID}, port ${PORT})"
+            log "started OK (pid ${PID}, port ${PORT}, http=${code})"
             return 0
         fi
         sleep 1
@@ -115,7 +116,7 @@ stop() {
         kill -9 "${pid}" 2>/dev/null || true
         rm -f "${PID_FILE}"
     fi
-    pkill -f "ttyd -p ${PORT}" 2>/dev/null || true
+    pkill -f "opencode serve .*--port ${PORT}" 2>/dev/null || true
     log "stopped"
     echo "stopped"
 }
@@ -127,7 +128,7 @@ status() {
     fi
     local code
     code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null)"
-    if [ "${code}" = "200" ]; then
+    if [ "${code}" = "200" ] || [ "${code}" = "401" ]; then
         echo "running (port ${PORT})"
         return 0
     fi
