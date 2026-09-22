@@ -225,24 +225,38 @@ jobs:
           HC=$(grep -rn "/vol4" /tmp/ci-cmd/cmd/ 2>/dev/null | grep -vE ":[0-9]+: *#" || true)
           [ -z "$HC" ] || { echo "$HC"; echo "::error::代码含硬编码 /vol4"; exit 1; }
 
-          echo "── ui/config 的 auth_token 与内置密码一致 ──"
-          # v2 默认强制鉴权；飞牛桌面 iframe 发不了 Basic 头，靠 url 里的
-          # ?auth_token=<base64(user:pass)> 通过。若 token 与 cmd/main 的
-          # 内置密码不一致，页面会 401 白屏且无任何日志线索，故强制校验。
-          mkdir -p /tmp/ci-ui && tar -xzf /tmp/app.tgz -C /tmp/ci-ui ui
+          echo "── 凭据链路完整（wizard -> install_callback -> ui/config）──"
+          # v2 引擎强制鉴权；飞牛桌面 iframe 发不了 Basic 头，只能靠 ui/config
+          # 里的 ?auth_token=。密码在【安装时】由向导提供，install_callback 负责
+          # 写入 credentials 并改写 ui/config。任何一环缺失都会导致桌面 401 白屏
+          # 且无日志线索，故在此强制校验整条链路。
+          # 注意：wizard/ 在 fpk 外层，ui/ 在 app.tgz 内层
+          mkdir -p /tmp/ci-ui /tmp/ci-wiz
+          tar -xzf /tmp/app.tgz -C /tmp/ci-ui ui
+          tar -xzf "$OUT" -C /tmp/ci-wiz wizard
           python3 - <<'PYEOF'
-          import base64, json, re
+          import json, re, sys
+
           cfg = json.load(open("/tmp/ci-ui/ui/config"))
           entry = list(cfg[".url"].values())[0]
-          url = entry["url"]
-          m = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url)
-          assert m, "app/ui/config 的 url 缺少 auth_token"
-          user, pw = base64.b64decode(m.group(1)).decode().split(":", 1)
-          main = open("/tmp/ci-cmd/cmd/main", encoding="utf-8").read()
-          mm = re.search(r"OPENCODE_SERVER_PASSWORD:-([^}]*)", main)
-          assert mm, "cmd/main 未找到内置密码"
-          assert pw == mm.group(1), "token 密码(%s) 与内置密码(%s) 不一致" % (pw, mm.group(1))
-          print("  auth_token OK（用户 %s）" % user)
+          assert "auth_token=" in entry.get("url", ""), "app/ui/config 缺少 auth_token 占位"
+
+          wiz = json.load(open("/tmp/ci-wiz/wizard/install"))
+          fields = {it.get("field") for st in wiz for it in st.get("items", [])}
+          assert "wizard_auth_password" in fields, "wizard/install 缺少密码字段"
+
+          cb = open("/tmp/ci-cmd/cmd/install_callback", encoding="utf-8").read()
+          assert "opencode_save_credentials" in cb, "install_callback 未保存向导凭据"
+          assert "opencode_apply_token" in cb, "install_callback 未注入 auth_token"
+
+          lib = open("/tmp/ci-cmd/cmd/_lib.sh", encoding="utf-8").read()
+          for fn in ("opencode_apply_token", "opencode_make_token", "opencode_save_credentials"):
+              assert fn + "()" in lib, "cmd/_lib.sh 缺少 " + fn
+
+          # ui/config 必须真的被 install_callback 找到并改写：确认路径解析存在
+          assert "REAL_APP_DIR" in lib and "ui/config" in lib, "缺少 ui/config 路径解析"
+
+          print("  OK 凭据链路完整（wizard_auth_password -> install_callback -> ui/config）")
           PYEOF
 
           echo "── 架构校验（ELF e_machine，小端序）──"

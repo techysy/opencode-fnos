@@ -84,7 +84,7 @@ echo "✓ platform = ${PLATFORM}"
 echo "📦 即将打包：${APPNAME} v${UPSTREAM_VERSION} (${PLATFORM})"
 
 # --- 校验：桌面入口与安装期凭据注入的约定 ---
-# 凭据在【安装时】由向导提供（wizard_auth_user / wizard_auth_password），
+# 凭据在【安装时】由向导提供（wizard_auth_password，用户名固定 opencode），
 # 由 cmd/install_callback 写入 ${DATA_DIR}/credentials 并改写 ui/config 的 token。
 # 因此包内 ui/config 的 token 只是占位值，这里校验的是“链路是否完整”：
 #   app/ui/config 存在且带 auth_token 占位
