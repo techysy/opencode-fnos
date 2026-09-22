@@ -1,7 +1,7 @@
 diff --git a/packages/server/src/middleware/authorization.ts b/packages/server/src/middleware/authorization.ts
 --- a/packages/server/src/middleware/authorization.ts
 +++ b/packages/server/src/middleware/authorization.ts
-@@ -8,8 +8,19 @@
+@@ -8,14 +8,28 @@
  import { HttpEffect, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
  
  const AUTH_TOKEN_QUERY = "auth_token"
@@ -21,7 +21,17 @@ diff --git a/packages/server/src/middleware/authorization.ts b/packages/server/s
  function emptyCredential() {
    return { username: "", password: Redacted.make("") }
  }
-@@ -31,6 +42,11 @@
+ 
+ function decodeCredential(input: string) {
+-  return Effect.fromResult(Encoding.decodeBase64String(input)).pipe(
++  // Cookie values cannot reliably carry trailing "=" padding: some proxies and
++  // cookie stores drop it. Re-pad before decoding so the token survives.
++  const padded = input.length % 4 === 0 ? input : input + "=".repeat(4 - (input.length % 4))
++  return Effect.fromResult(Encoding.decodeBase64String(padded)).pipe(
+     Effect.match({
+       onFailure: emptyCredential,
+       onSuccess: (header) => {
+@@ -31,6 +45,11 @@
    const url = new URL(request.url, "http://localhost")
    const token = url.searchParams.get(AUTH_TOKEN_QUERY)
    if (token) return decodeCredential(token)
@@ -33,7 +43,7 @@ diff --git a/packages/server/src/middleware/authorization.ts b/packages/server/s
    const match = /^Basic\s+(.+)$/i.exec(request.headers.authorization ?? "")
    if (match) return decodeCredential(match[1])
    return Effect.succeed(emptyCredential())
-@@ -52,7 +68,23 @@
+@@ -52,7 +71,23 @@
          // credential checks here; the connect handler consumes and validates the ticket.
          const url = new URL(request.url, "http://localhost")
          if (hasPtyConnectTicketURL(url) || hasPersistentPtyConnectTicketURL(url)) return yield* effect
@@ -93,3 +103,12 @@ diff --git a/packages/cli/src/services/web-ui.ts b/packages/cli/src/services/web
    return Effect.succeed(
      request.method === "HEAD"
        ? HttpServerResponse.empty({ status: 200, headers })
+@@ -56,7 +65,7 @@
+ }
+ 
+ function csp(hash = "") {
+-  return `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob:`
++  return `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob:; frame-ancestors *`
+ }
+ 
+ function cspForHtml(body: string) {
