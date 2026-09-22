@@ -103,12 +103,4 @@ diff --git a/packages/cli/src/services/web-ui.ts b/packages/cli/src/services/web
    return Effect.succeed(
      request.method === "HEAD"
        ? HttpServerResponse.empty({ status: 200, headers })
-@@ -56,7 +65,7 @@
- }
- 
- function csp(hash = "") {
--  return `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob:`
-+  return `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'${hash ? ` 'sha256-${hash}'` : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; media-src 'self' data:; connect-src * data: blob:; frame-ancestors *`
- }
- 
- function cspForHtml(body: string) {
+
