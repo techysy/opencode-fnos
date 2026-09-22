@@ -1,4 +1,4 @@
-appname               = oc
+appname               = opencode
 version               = 2.0.12
 display_name          = OpenCode
 desc                  = OpenCode 飞牛版 — 内置官方 v2.0.12 引擎与原生 Web 界面，桌面点开即用
@@ -9,6 +9,6 @@ maintainer_url        = https://github.com/anomalyco/opencode
 distributor           = techysy
 distributor_url       = https://github.com/techysy/opencode-fnos
 desktop_uidir         = ui
-desktop_applaunchname = oc.Application
+desktop_applaunchname = opencode.Application
 service_port          = 19282
 ctl_stop              = true

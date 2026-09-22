@@ -27,12 +27,12 @@
 
 | 架构 | 文件 | 适用设备 |
 | :--- | :--- | :--- |
-| x86_64 | `oc-<版本>-x86.fpk` | 绝大多数 Intel / AMD 机型 |
-| arm64 | `oc-<版本>-arm.fpk` | ARM 机型（如部分新硬件） |
+| x86_64 | `opencode-<版本>-x86.fpk` | 绝大多数 Intel / AMD 机型 |
+| arm64 | `opencode-<版本>-arm.fpk` | ARM 机型（如部分新硬件） |
 
 > 当前版本：**v2.0.12** — 内置官方 OpenCode v2.0.12 引擎
 >
-> 文件名前缀必须等于 manifest 的 `appname`（fnOS 硬性要求），本应用 `appname = oc`，故文件名以 `oc-` 开头。
+> 文件名前缀必须等于 manifest 的 `appname`（fnOS 硬性要求），本应用 `appname = opencode`，故文件名以 `oc-` 开头。
 
 ---
 
@@ -57,7 +57,7 @@
 | :--- | :--- |
 | ✅ 官方原生 Web UI | Solid.js SPA，由上游构建产出，跟随上游自动升级 |
 | ✅ 飞牛桌面集成 | 桌面图标一键打开，iframe 内嵌（已处理跨源与鉴权） |
-| ✅ 数据隔离 | 独立用户 `oc`，数据存于 `/vol4/@appdata/oc/` |
+| ✅ 数据隔离 | 独立用户 `oc`，数据存于 `/vol4/@appdata/opencode/` |
 | ✅ XDG 全隔离 | config/data/cache/state 全部落在应用数据目录 |
 | ✅ 可与其他版本共存 | appname 独立（`oc`），端口 19282 |
 | ✅ 实时通道用 SSE | 事件流为 Server-Sent Events，对 iframe/反代更友好 |
@@ -69,7 +69,7 @@
 应用的 `appname` 为 `oc`，因此可像 `dsh` 一样用短地址直达：
 
 ```
-http://oc.techysy.fnos.net/
+http://opencode.techysy.fnos.net/
 ```
 
 > 域名是通配的（`*.techysy.fnos.net`），实际路由由 fnOS 门户按 `appname` 匹配。
@@ -85,7 +85,7 @@ http://oc.techysy.fnos.net/
 
 ```bash
 # SSH 到 NAS（需 root）
-appcgi install /path/to/oc-2.0.12-x86.fpk
+appcgi install /path/to/opencode-2.0.12-x86.fpk
 ```
 
 ---
@@ -96,19 +96,19 @@ appcgi install /path/to/oc-2.0.12-x86.fpk
 
 ### 工作目录
 
-工作目录默认为 `/vol4/@appdata/oc/workspace`。要指向自己的代码仓库：
+工作目录默认为 `/vol4/@appdata/opencode/workspace`。要指向自己的代码仓库：
 
 ```bash
 sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
-  /var/apps/oc/cmd/main restart
+  /var/apps/opencode/cmd/main restart
 ```
 
-或编辑 `/var/apps/oc/cmd/main`，修改 `WORKSPACE` 默认值。
+或编辑 `/var/apps/opencode/cmd/main`，修改 `WORKSPACE` 默认值。
 
 ### 服务管理
 
 ```bash
-/var/apps/oc/cmd/main {start|stop|status|restart}
+/var/apps/opencode/cmd/main {start|stop|status|restart}
 ```
 
 ---

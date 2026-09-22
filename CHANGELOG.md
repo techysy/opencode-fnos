@@ -26,10 +26,10 @@
 
 - 🖥️ **官方原生 Web UI**：Solid.js SPA，非重制界面
 - 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=oc`
-- 🌐 **短地址访问**：`appname` 为 `oc`，可用 <http://oc.techysy.fnos.net/> 直达
+- 🌐 **短地址访问**：`appname` 为 `oc`，可用 <http://opencode.techysy.fnos.net/> 直达
 - 📡 **实时通道用 SSE**：事件流为 Server-Sent Events（带心跳、`X-Accel-Buffering: no`），
   对 iframe 与反向代理比 WebSocket 更友好
-- 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/oc/`
+- 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/opencode/`
 - 🗂️ **XDG 目录隔离**：config/data/cache/state 全部指向应用数据目录
 - 🤝 **可与其他版本共存**：`appname=oc`，端口 **19282**，与 mimocode(19280/19281) 互不冲突
 - 📜 **安装协议授权向导**：首次安装需勾选同意 7 项条款
@@ -61,25 +61,25 @@
 
 ### 🐛 修复：fpk 文件名必须等于 appname
 
-原先文件名保持 `opencode-tui-*` 而 `appname = oc`，导致 fnOS 应用中心
+原先文件名保持 `opencode-tui-*` 而 `appname = opencode`，导致 fnOS 应用中心
 报 **「不符合系统要求」** 拒绝安装（与架构、代码均无关）。
 
 fnOS 硬性要求 **fpk 文件名前缀 = manifest 的 appname**，因此文件名改回
-以 appname 开头：`oc-2.0.12-x86.fpk` / `oc-2.0.12-arm.fpk`。
+以 appname 开头：`opencode-2.0.12-x86.fpk` / `opencode-2.0.12-arm.fpk`。
 
 - 构建脚本与 CI 均改为从 `appname` 派生文件名
 - CI 新增校验：文件名前缀必须与 appname 一致（不一致直接失败）
 - `deliver-fpk.sh` 同步适配
 
-> 短地址 <http://oc.techysy.fnos.net/> 不受影响（由 appname 决定）。
+> 短地址 <http://opencode.techysy.fnos.net/> 不受影响（由 appname 决定）。
 
 ### ⚠️ 升级说明
 
 v1 与 v2 实现不同，需**卸载重装**：
 
 1. 应用中心卸载旧版（1.18.x）
-2. 安装 `oc-2.0.12-*.fpk`
-3. 应用标识 `oc` 与端口 19282 不变，数据目录 `/vol4/@appdata/oc/` 保留
+2. 安装 `opencode-2.0.12-*.fpk`
+3. 应用标识 `oc` 与端口 19282 不变，数据目录 `/vol4/@appdata/opencode/` 保留
 
 ---
 
@@ -94,7 +94,7 @@ v1 与 v2 实现不同，需**卸载重装**：
 - 🖥️ **官方原版 TUI**：直接使用官方 `opencode` 二进制的 TUI（终端界面）
 - 🌐 **网页终端接入**：通过 ttyd 1.7.7 把 TUI 包装为网页终端
 - 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=oc`
-- 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/oc/`
+- 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/opencode/`
 - 🗂️ **XDG 目录隔离**
 - 🤝 **可与其他版本共存**：端口 **19282**
 - 📜 **安装协议授权向导**

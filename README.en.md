@@ -28,13 +28,13 @@ Pick the package matching your NAS CPU architecture:
 
 | Arch | File | Devices |
 | :--- | :--- | :--- |
-| x86_64 | `oc-<version>-x86.fpk` | Most Intel / AMD models |
-| arm64 | `oc-<version>-arm.fpk` | ARM models |
+| x86_64 | `opencode-<version>-x86.fpk` | Most Intel / AMD models |
+| arm64 | `opencode-<version>-arm.fpk` | ARM models |
 
 > Current: **v2.0.12** — bundles the official OpenCode v2.0.12 engine
 >
 > The filename prefix must equal the manifest `appname` (fnOS hard requirement).
-> This app uses `appname = oc`, hence the `oc-` prefix.
+> This app uses `appname = opencode`, hence the `oc-` prefix.
 
 ---
 
@@ -60,7 +60,7 @@ This project packages the **official OpenCode** as a fnOS app:
 | :--- | :--- |
 | ✅ Official native Web UI | Solid.js SPA built upstream, follows upstream automatically |
 | ✅ Desktop integration | One-click icon, embedded via iframe (cross-origin + auth handled) |
-| ✅ Data isolation | Dedicated user `oc`, data in `/vol4/@appdata/oc/` |
+| ✅ Data isolation | Dedicated user `oc`, data in `/vol4/@appdata/opencode/` |
 | ✅ XDG isolation | config/data/cache/state all inside the app data dir |
 | ✅ Coexists with others | Own appname (`oc`), port 19282 |
 | ✅ SSE for realtime | Event stream uses Server-Sent Events (iframe/proxy friendly) |
@@ -72,7 +72,7 @@ This project packages the **official OpenCode** as a fnOS app:
 The app registers the 2-letter `appname` `oc`, so it is reachable at a short URL:
 
 ```
-http://oc.techysy.fnos.net/
+http://opencode.techysy.fnos.net/
 ```
 
 > The domain is wildcarded (`*.techysy.fnos.net`); routing is based on the
@@ -89,7 +89,7 @@ http://oc.techysy.fnos.net/
 
 ```bash
 # SSH into the NAS (root required)
-appcgi install /path/to/oc-2.0.12-x86.fpk
+appcgi install /path/to/opencode-2.0.12-x86.fpk
 ```
 
 ---
@@ -100,19 +100,19 @@ Then click **OpenCode** on the fnOS desktop.
 
 ### Workspace
 
-The default workspace is `/vol4/@appdata/oc/workspace`. To point it at your own repo:
+The default workspace is `/vol4/@appdata/opencode/workspace`. To point it at your own repo:
 
 ```bash
 sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
-  /var/apps/oc/cmd/main restart
+  /var/apps/opencode/cmd/main restart
 ```
 
-Or edit `/var/apps/oc/cmd/main` and change the `WORKSPACE` default.
+Or edit `/var/apps/opencode/cmd/main` and change the `WORKSPACE` default.
 
 ### Service management
 
 ```bash
-/var/apps/oc/cmd/main {start|stop|status|restart}
+/var/apps/opencode/cmd/main {start|stop|status|restart}
 ```
 
 ---

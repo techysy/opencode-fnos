@@ -7,7 +7,7 @@
 # --- 数据目录推导 ---
 # 优先 TRIM_PKGVAR（fnOS 注入）；否则从 home 软链或 APP_DIR 推导卷，不写死 /vol4
 opencode_resolve_paths() {
-    APP_NAME="${TRIM_APPNAME:-oc}"
+    APP_NAME="${TRIM_APPNAME:-opencode}"
     APP_DIR="${TRIM_APPDEST:-/var/apps/${APP_NAME}}"
 
     if [ -n "${TRIM_PKGVAR:-}" ]; then
@@ -33,8 +33,8 @@ opencode_resolve_paths() {
 }
 
 # --- 兼容两种部署布局 ---
-#   fnOS 传 TRIM_APPDEST=/vol4/@appcenter/oc → bin 直接在 ${APP_DIR}/bin
-#   旧版/部分版本 TRIM_APPDEST=/var/apps/oc    → bin 在 ${APP_DIR}/target/bin
+#   fnOS 传 TRIM_APPDEST=/vol4/@appcenter/opencode → bin 直接在 ${APP_DIR}/bin
+#   旧版/部分版本 TRIM_APPDEST=/var/apps/opencode    → bin 在 ${APP_DIR}/target/bin
 opencode_resolve_appdir() {
     if [ -d "${APP_DIR}/bin" ]; then
         REAL_APP_DIR="${APP_DIR}"

@@ -14,7 +14,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FPK_DIR="${FPK_DELIVER_DIR:-/vol1/1000/fnOS App/fpk/opencode}"
+# 应用标识：fnOS 要求 fpk 文件名前缀必须等于它，因此全局只在此处解析一次
+APPNAME=$(sed -n 's/^appname[[:space:]]*=[[:space:]]*\([^[:space:]]*\)/\1/p' "$ROOT/manifest" | head -1)
+[ -n "$APPNAME" ] || { echo "ERROR: 无法从 manifest 解析 appname" >&2; exit 1; }
+FPK_DIR="${FPK_DELIVER_DIR:-/vol1/1000/fnOS App/fpk/${APPNAME}}"
 OLDFPK_DIR="${FPK_OLD_DIR:-/vol1/1000/fnOS App/fpk/oldfpk}"
 UPSTREAM_VERSION="${UPSTREAM_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 2.0.12)}"
 ARCH="${ARCH:-x86}"
@@ -78,7 +81,7 @@ else
 fi
 echo "✓ platform = ${PLATFORM}"
 
-echo "📦 即将打包：oc v${UPSTREAM_VERSION} (${PLATFORM})"
+echo "📦 即将打包：${APPNAME} v${UPSTREAM_VERSION} (${PLATFORM})"
 
 # --- 校验：ui/config 的 auth_token 必须与 cmd/main 的内置密码一致 ---
 # 二者不一致会导致飞牛桌面 iframe 打开后 401（白屏），且没有任何日志线索。
@@ -87,7 +90,8 @@ if [ -f "$ROOT/app/ui/config" ]; then
 import base64, json, re, sys, os
 root = sys.argv[1]
 cfg = json.load(open(os.path.join(root, "app/ui/config")))
-url = cfg[".url"]["oc.Application"]["url"]
+entry = list(cfg[".url"].values())[0]
+url = entry["url"]
 m = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url)
 if not m:
     sys.exit("ERROR: app/ui/config 的 url 缺少 auth_token")
@@ -110,9 +114,6 @@ fi
 
 # --- fnpack build ---
 cd "$ROOT"
-# fnpack 以 manifest 的 appname 命名产物，这里动态读取，避免改名后失效
-APPNAME=$(sed -n 's/^appname[[:space:]]*=[[:space:]]*\([^[:space:]]*\)/\1/p' "$ROOT/manifest" | head -1)
-[ -n "$APPNAME" ] || { echo 'ERROR: 无法从 manifest 解析 appname' >&2; exit 1; }
 rm -f "$APPNAME.fpk"
 fnpack build >/dev/null
 [ -f "$APPNAME.fpk" ] || { echo 'ERROR: 打包失败（未生成 $APPNAME.fpk）' >&2; exit 1; }

@@ -1,8 +1,8 @@
 # 故障排查
 
 > 当前版本：**v2.0.12**
-> 端口默认 **19282**，数据目录默认 **/vol4/@appdata/oc/**。
-> 应用名 `oc`，短地址 <http://oc.techysy.fnos.net/>
+> 端口默认 **19282**，数据目录默认 **/vol4/@appdata/opencode/**。
+> 应用名 `opencode`，短地址 <http://opencode.techysy.fnos.net/>
 
 ---
 
@@ -10,10 +10,10 @@
 
 ```bash
 # 1. 服务状态
-/var/apps/oc/cmd/main status
+/var/apps/opencode/cmd/main status
 
 # 2. 看日志（最重要的排查入口）
-tail -n 80 /vol4/@appdata/oc/oc.log
+tail -n 80 /vol4/@appdata/opencode/oc.log
 
 # 3. 本机是否响应（401 = 服务正常但需鉴权，是**预期**结果）
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:19282/
@@ -23,7 +23,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   "http://127.0.0.1:19282/?auth_token=b3BlbmNvZGU6b2MtZm5vcw=="
 
 # 5. 重启
-/var/apps/oc/cmd/main restart
+/var/apps/opencode/cmd/main restart
 ```
 
 ---
@@ -35,8 +35,8 @@ v2 默认强制鉴权。飞牛桌面用 iframe 嵌入，**无法发送 Basic 认
 
 | 位置 | 内容 |
 | :--- | :--- |
-| `/var/apps/oc/ui/config` | `url` 里的 `?auth_token=...` |
-| `/var/apps/oc/cmd/main` | `PASSWORD="\${OPENCODE_PASSWORD:-\${OPENCODE_SERVER_PASSWORD:-oc-fnos}}"` |
+| `/var/apps/opencode/ui/config` | `url` 里的 `?auth_token=...` |
+| `/var/apps/opencode/cmd/main` | `PASSWORD="\${OPENCODE_PASSWORD:-\${OPENCODE_SERVER_PASSWORD:-oc-fnos}}"` |
 
 **排查**：
 
@@ -44,7 +44,7 @@ v2 默认强制鉴权。飞牛桌面用 iframe 嵌入，**无法发送 Basic 认
 # 查看当前 token 解出来是什么
 python3 - <<'EOF'
 import base64, json, re
-cfg = json.load(open("/var/apps/oc/ui/config"))
+cfg = json.load(open("/var/apps/opencode/ui/config"))
 url = cfg[".url"]["oc.Application"]["url"]
 tok = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url).group(1)
 print("token    :", tok)
@@ -52,7 +52,7 @@ print("decoded  :", base64.b64decode(tok).decode())
 EOF
 
 # 查看 cmd/main 内置密码
-grep -o 'OPENCODE_SERVER_PASSWORD:-[^}]*' /var/apps/oc/cmd/main
+grep -o 'OPENCODE_SERVER_PASSWORD:-[^}]*' /var/apps/opencode/cmd/main
 ```
 
 两者必须一致（格式为 `opencode:密码`）。构建脚本与 CI 都会强制校验，
@@ -60,7 +60,7 @@ grep -o 'OPENCODE_SERVER_PASSWORD:-[^}]*' /var/apps/oc/cmd/main
 
 > **临时绕过**：设置固定密码后重启，并手工拼 token
 > ```bash
-> sudo -u oc OPENCODE_PASSWORD=mysecret /var/apps/oc/cmd/main restart
+> sudo -u oc OPENCODE_PASSWORD=mysecret /var/apps/opencode/cmd/main restart
 > printf 'opencode:mysecret' | base64    # 用这个值替换 ui/config 的 auth_token
 > ```
 
@@ -97,21 +97,21 @@ ss -tlnp | grep 19282
 若要手工运行引擎调试，记得带上：
 
 ```bash
-export XDG_DATA_HOME=/vol4/@appdata/oc/share
-export XDG_CONFIG_HOME=/vol4/@appdata/oc/config
-export XDG_CACHE_HOME=/vol4/@appdata/oc/cache
-export XDG_STATE_HOME=/vol4/@appdata/oc/state
+export XDG_DATA_HOME=/vol4/@appdata/opencode/share
+export XDG_CONFIG_HOME=/vol4/@appdata/opencode/config
+export XDG_CACHE_HOME=/vol4/@appdata/opencode/cache
+export XDG_STATE_HOME=/vol4/@appdata/opencode/state
 ```
 
 ---
 
 ## 工作目录
 
-默认 `/vol4/@appdata/oc/workspace`（引擎拒绝把 `/` 当项目目录）。
+默认 `/vol4/@appdata/opencode/workspace`（引擎拒绝把 `/` 当项目目录）。
 
 ```bash
 sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
-  /var/apps/oc/cmd/main restart
+  /var/apps/opencode/cmd/main restart
 ```
 
 ---
@@ -185,10 +185,10 @@ export BUN_INSTALL_CACHE_DIR=/tmp/bun-cache
 
 ```bash
 # 停止
-/var/apps/oc/cmd/main stop
+/var/apps/opencode/cmd/main stop
 
 # 卸载后数据目录仍保留，如需彻底清理：
-rm -rf /vol4/@appdata/oc
+rm -rf /vol4/@appdata/opencode
 ```
 
 ---
@@ -205,4 +205,4 @@ v1（1.18.x）与 v2（2.0.x）是**不同的实现**：
 | 包大小 | ~63 MB | ~106 MB |
 
 升级方式：**应用中心卸载旧版 → 安装新版**。
-应用标识 `oc` 与端口 19282 保持不变，数据目录 `/vol4/@appdata/oc/` 不会被删除。
+应用标识 `oc` 与端口 19282 保持不变，数据目录 `/vol4/@appdata/opencode/` 不会被删除。
