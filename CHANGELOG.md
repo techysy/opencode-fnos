@@ -27,6 +27,11 @@
     因为页面加载后会把 token 从地址栏抹掉，iframe 内刷新/跳转会丢鉴权，
     表现为「登录不进去」。现在后续请求凭 Cookie 自动认证。
   - **密码二次确认**：安装向导新增「确认密码」，两次不一致会中止安装。
+  - **免费模型登录**：新增 `cmd/login`，一键登录 OpenCode 账号解锁官方免费模型。
+    没登录时引擎会发 `apiKey="public"`，服务端拒绝并报
+    「free tier can only be used from within OpenCode」。
+    （不用 `opencode auth login`：它的 TUI 输出被缓冲，管道里读不到验证码；
+    改为直接调 API + 按引擎 schema 写 SQLite。）
   - **免密模式**：安装向导新增「不设置密码（免密访问）」开关。
     开启后引擎完全不鉴权（`OPENCODE_DISABLE_AUTH=1` -> `ServerAuth.Config.layer`），
     桌面点开图标直接进，不弹登录框。

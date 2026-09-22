@@ -180,7 +180,33 @@ sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
 > 安装时由 `cmd/install_callback` 自动把密码写入 `ui/config` 的 token，
 > 无需手工同步。构建脚本与 CI 会强制校验整条链路完整。
 
+#### 用官方免费模型（需登录）
+
+OpenCode Zen 的免费模型**必须登录 OpenCode 账号**才能用。没登录时引擎会发
+`apiKey="public"`，服务端回：
+
+```
+Error from provider (Console):
+OpenCode's free tier can only be used from within OpenCode
+```
+
+登录（SSH 执行）：
+
+```bash
+/var/apps/opencode/cmd/login           # 出验证码，去网页授权
+/var/apps/opencode/cmd/login --status  # 查看登录状态
+/var/apps/opencode/cmd/login --logout  # 退出登录
+```
+
+会打印一个验证码，浏览器打开 <https://opencode.ai/console/device> 输入即可
+（免费，不涉及付费）。登录后自动重启服务。
+
+> 也可以用 `OPENCODE_API_KEY` 环境变量接自己的 key（DeepSeek / OpenRouter 等），
+> 这样就完全不依赖免费额度，环境变量优先级高于账号凭据。
+
 #### 免密模式的技术细节
+
+
 
 免密靠 `OPENCODE_DISABLE_AUTH=1` 实现，由 `cmd/main` 自动导出（标记文件为
 `/vol4/@appdata/opencode/noauth`）。引擎侧走 `ServerAuth.Config.layer`（`Option.none`），

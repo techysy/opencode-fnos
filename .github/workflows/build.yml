@@ -278,6 +278,18 @@ jobs:
 
           # ui/config 必须真的被 install_callback 找到并改写：确认路径解析存在
           assert "REAL_APP_DIR" in lib and "ui/config" in lib, "缺少 ui/config 路径解析"
+          # --- 免费模型登录链路：app/scripts/oc-login.py 必须真的在包里 ---
+          # 免费模型要 OAuth 凭据，没凭据引擎会发 apiKey="public"，服务端直接拒绝。
+          # cmd/login 依赖 app/scripts/oc-login.py；它若没被打进 app.tgz，
+          # 用户装了包也登不了，且报错很隐晦（文件不存在）。这里强制校验。
+          assert os.path.exists("/tmp/ci-ui/scripts/oc-login.py"), \
+              "app.tgz 缺少 scripts/oc-login.py（免费模型登录工具）"
+          ocl = open("/tmp/ci-ui/scripts/oc-login.py", encoding="utf-8").read()
+          assert "credential" in ocl and "integration_id" in ocl, \
+              "oc-login.py 未按引擎 schema 写凭据表"
+          assert "opencode.ai/console" in ocl, "oc-login.py 缺少设备码端点"
+          lg = open("/tmp/ci-cmd/cmd/login", encoding="utf-8").read()
+          assert "oc-login.py" in lg, "cmd/login 未调用 oc-login.py"
 
           print("  OK 凭据链路完整（wizard_auth_password -> install_callback -> ui/config）")
           PYEOF
