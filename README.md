@@ -158,9 +158,13 @@ sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
 v2 默认强制鉴权（未配置也会随机生成密码）。飞牛桌面用 `<iframe>` 嵌入，
 **无法发送 Basic 认证头**，因此：
 
-- **安装向导填写密码**（用户名固定 `opencode`，引擎硬编码不可改；留空自动生成）
+- **安装向导填写密码 + 确认密码**（用户名固定 `opencode`，引擎硬编码不可改；留空自动生成）
+  两次输入不一致会中止安装，不会留下半成品
 - 密码保存在 `/vol4/@appdata/opencode/credentials`，可用 `OPENCODE_PASSWORD` 环境变量临时覆盖
 - `app/ui/config` 的 `url` 带上 `?auth_token=<base64(opencode:密码)>`
+- **会话 Cookie**：首次带 token 访问时下发 `HttpOnly` Cookie。
+  因为前端加载后会把 token 从地址栏抹掉，iframe 内刷新/跳转本会丢鉴权，
+  现在后续请求凭 Cookie 自动认证（这是「登录不进去」的根因）
 
 > 安装时由 `cmd/install_callback` 自动把密码写入 `ui/config` 的 token，
 > 无需手工同步。构建脚本与 CI 会强制校验整条链路完整。

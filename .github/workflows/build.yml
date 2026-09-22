@@ -127,7 +127,12 @@ jobs:
 
           cd "$WORK/src"
           # 上游 tarball 不含 .git，用 patch -p1 应用适配补丁
-          patch -p1 --forward < "$GITHUB_WORKSPACE/docs/patches/fnos-adaptation.patch"
+          #   fnos-adaptation:     CSP 加 frame-ancestors，允许飞牛桌面跨源 iframe 嵌入
+          #   fnos-session-cookie: iframe 发不了 Basic 头，改为下发 HttpOnly Cookie
+          #                        （解决登录不进去 / 刷新掉登录）
+          for p in fnos-adaptation fnos-session-cookie; do
+            patch -p1 --forward < "$GITHUB_WORKSPACE/docs/patches/${p}.patch"
+          done
 
           bun install --ignore-scripts
 
@@ -244,6 +249,9 @@ jobs:
           wiz = json.load(open("/tmp/ci-wiz/wizard/install"))
           fields = {it.get("field") for st in wiz for it in st.get("items", [])}
           assert "wizard_auth_password" in fields, "wizard/install 缺少密码字段"
+          assert "wizard_auth_password_confirm" in fields, "wizard/install 缺少确认密码字段"
+          cb2 = open("/tmp/ci-cmd/cmd/install_callback", encoding="utf-8").read()
+          assert "两次输入的密码不一致" in cb2, "install_callback 未校验两次密码一致"
 
           cb = open("/tmp/ci-cmd/cmd/install_callback", encoding="utf-8").read()
           assert "opencode_save_credentials" in cb, "install_callback 未保存向导凭据"

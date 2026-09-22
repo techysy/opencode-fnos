@@ -26,6 +26,19 @@ if [ ! -x "${REAL_APP_DIR}/bin/opencode" ]; then
     exit 0
 fi
 
+# --- 校验：两次密码必须一致 ---
+# 安装向导没有原生「二次确认」校验，这里自行比对。
+# 不一致时【不写入凭据、不改桌面入口、不启动服务】，直接失败退出，
+# 让用户重装；避免出现「服务跑着但密码不知道是哪个」的悬空状态。
+PW1="${wizard_auth_password:-}"
+PW2="${wizard_auth_password_confirm:-}"
+if [ -n "${PW1}${PW2}" ] && [ "${PW1}" != "${PW2}" ]; then
+    echo "[$(date '+%F %T')] ERROR: 两次输入的密码不一致，安装中止" >> "${LOG}"
+    echo "ERROR: 两次输入的密码不一致，请重新安装并确认两次输入相同。" >&2
+    echo "ERROR: 安装已中止，未做任何改动。" >&2
+    exit 1
+fi
+
 # --- 写入向导凭据 ---
 # opencode_save_credentials 打印两行：用户名、密码
 CREDS="$(opencode_save_credentials opencode "")"

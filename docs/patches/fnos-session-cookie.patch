@@ -1,0 +1,95 @@
+diff --git a/packages/server/src/middleware/authorization.ts b/packages/server/src/middleware/authorization.ts
+--- a/packages/server/src/middleware/authorization.ts
++++ b/packages/server/src/middleware/authorization.ts
+@@ -8,8 +8,19 @@
+ import { HttpEffect, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+ 
+ const AUTH_TOKEN_QUERY = "auth_token"
++const AUTH_TOKEN_COOKIE = "opencode_auth_token"
+ const WWW_AUTHENTICATE = 'Basic realm="Secure Area"'
+ 
++function parseCookies(header: string | undefined) {
++  const out: Record<string, string> = {}
++  for (const part of (header ?? "").split(";")) {
++    const separator = part.indexOf("=")
++    if (separator === -1) continue
++    out[part.slice(0, separator).trim()] = part.slice(separator + 1).trim()
++  }
++  return out
++}
++
+ function emptyCredential() {
+   return { username: "", password: Redacted.make("") }
+ }
+@@ -31,6 +42,11 @@
+   const url = new URL(request.url, "http://localhost")
+   const token = url.searchParams.get(AUTH_TOKEN_QUERY)
+   if (token) return decodeCredential(token)
++  // fnOS: the desktop embeds this UI in a cross-origin <iframe>, which cannot send the
++  // Authorization header. The token is stripped from the address bar after first paint,
++  // so in-iframe reloads and navigation would otherwise lose authentication.
++  const cookie = parseCookies(request.headers.cookie)[AUTH_TOKEN_COOKIE]
++  if (cookie) return decodeCredential(cookie)
+   const match = /^Basic\s+(.+)$/i.exec(request.headers.authorization ?? "")
+   if (match) return decodeCredential(match[1])
+   return Effect.succeed(emptyCredential())
+@@ -52,7 +68,23 @@
+         // credential checks here; the connect handler consumes and validates the ticket.
+         const url = new URL(request.url, "http://localhost")
+         if (hasPtyConnectTicketURL(url) || hasPersistentPtyConnectTicketURL(url)) return yield* effect
+-        if (yield* authorizedRequest(request, config)) return yield* effect
++        if (yield* authorizedRequest(request, config)) {
++          // First hit carries ?auth_token=; persist it so in-iframe reloads and
++          // navigation keep working after the token is stripped from the address bar.
++          const token = new URL(request.url, "http://localhost").searchParams.get(AUTH_TOKEN_QUERY)
++          if (!token) return yield* effect
++          return yield* effect.pipe(
++            HttpEffect.withPreResponseHandler((_request, response) =>
++              Effect.succeed(
++                HttpServerResponse.setHeader(
++                  response,
++                  "set-cookie",
++                  `${AUTH_TOKEN_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`,
++                ),
++              ),
++            ),
++          )
++        }
+         yield* HttpEffect.appendPreResponseHandler((_request, response) =>
+           Effect.succeed(HttpServerResponse.setHeader(response, "www-authenticate", WWW_AUTHENTICATE)),
+         )
+diff --git a/packages/cli/src/services/web-ui.ts b/packages/cli/src/services/web-ui.ts
+--- a/packages/cli/src/services/web-ui.ts
++++ b/packages/cli/src/services/web-ui.ts
+@@ -4,6 +4,9 @@
+ import { createHash } from "node:crypto"
+ import { load, type AssetMap } from "../app-assets"
+ 
++const AUTH_TOKEN_QUERY = "auth_token"
++const AUTH_TOKEN_COOKIE = "opencode_auth_token"
++
+ export const handler = Effect.fn("cli.web-ui.handler")(function* (options?: { readonly assets?: AssetMap }) {
+   const fileSystem = yield* FileSystem.FileSystem
+   const assets = options?.assets
+@@ -36,7 +39,8 @@
+     return Effect.succeed(HttpServerResponse.empty({ status: 405 }))
+   const html = name === "index.html"
+   const revalidate = html || name === "sw.js" || name === "registerSW.js"
+-  const headers = {
++  const token = url.searchParams.get(AUTH_TOKEN_QUERY)
++  const headers: Record<string, string> = {
+     "content-type": FSUtil.mimeType(name),
+     "cache-control": revalidate ? "no-cache" : "public, max-age=31536000, immutable",
+     "content-security-policy": html
+@@ -44,6 +48,11 @@
+       : csp(),
+     "x-content-type-options": "nosniff",
+   }
++  // fnOS: the desktop embeds this UI in a cross-origin <iframe> that cannot send the
++  // Authorization header. The page opens with ?auth_token= and immediately strips it from
++  // the address bar, so reloads/navigation inside the frame would lose authentication.
++  // Persist it in an HttpOnly cookie; the auth middleware accepts that cookie too.
++  if (token && html) headers["set-cookie"] = `${AUTH_TOKEN_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`
+   return Effect.succeed(
+     request.method === "HEAD"
+       ? HttpServerResponse.empty({ status: 200, headers })

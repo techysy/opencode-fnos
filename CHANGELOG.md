@@ -23,6 +23,10 @@
   - 存于 `/vol4/@appdata/opencode/credentials`，由 `cmd/install_callback` 自动同步到
     `app/ui/config` 的 `?auth_token=`，桌面图标点开即自动登录
   - 构建脚本与 CI 强制校验整条凭据链路完整
+  - **会话 Cookie**：首次带 `?auth_token=` 访问时下发 HttpOnly Cookie。
+    因为页面加载后会把 token 从地址栏抹掉，iframe 内刷新/跳转会丢鉴权，
+    表现为「登录不进去」。现在后续请求凭 Cookie 自动认证。
+  - **密码二次确认**：安装向导新增「确认密码」，两次不一致会中止安装。
 
 ### ✨ 功能
 

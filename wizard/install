@@ -16,6 +16,14 @@
         "label": "登录密码",
         "initValue": "",
         "tip": "登录 OpenCode Web 界面用的密码（用户名固定为 opencode）。留空则自动生成随机强密码并写入数据目录。"
+      },
+      {
+        "type": "password",
+        "field": "wizard_auth_password_confirm",
+        "label": "确认密码",
+        "initValue": "",
+        "tip": "请再次输入上面的密码。两次必须一致，否则安装会失败并提示。",
+        "required": false
       }
     ]
   },

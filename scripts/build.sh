@@ -42,7 +42,13 @@ if [ "${1:-}" = "--from-source" ]; then
     tar xzf "$WORK/opencode.tar.gz" -C "$WORK/src" --strip-components=1
 
     echo "--- 应用飞牛适配补丁 ---"
-    (cd "$WORK/src" && patch -p1 --forward < "$ROOT/docs/patches/fnos-adaptation.patch")
+    # fnos-adaptation:      CSP 加 frame-ancestors，允许被飞牛桌面跨源 iframe 嵌入
+    # fnos-session-cookie:  iframe 发不了 Basic 认证头，且页面加载后会把 ?auth_token=
+    #                       从地址栏抹掉；改为首次访问下发 HttpOnly Cookie，后续请求凭
+    #                       Cookie 认证，解决「登录不进去 / 刷新即掉登录」
+    for p in fnos-adaptation fnos-session-cookie; do
+        (cd "$WORK/src" && patch -p1 --forward < "$ROOT/docs/patches/${p}.patch")
+    done
 
     echo "--- 安装依赖 ---"
     (cd "$WORK/src" && \
@@ -50,6 +56,15 @@ if [ "${1:-}" = "--from-source" ]; then
         "${BUN_BIN:-bun}" install --ignore-scripts)
 
     echo "--- 构建引擎（内嵌 Web UI） ---"
+    # 本地迭代可用 OPENCODE_BIN_SOURCE 指定已编译好的引擎，跳过耗时的源码构建。
+    # 注意：该引擎必须已经打好 docs/patches/ 下的补丁，否则功能会缺失。
+    if [ -n "${OPENCODE_BIN_SOURCE:-}" ]; then
+        [ -x "${OPENCODE_BIN_SOURCE}" ] || { echo "ERROR: OPENCODE_BIN_SOURCE 不可执行：${OPENCODE_BIN_SOURCE}" >&2; exit 1; }
+        mkdir -p "$ROOT/app/bin"
+        cp "${OPENCODE_BIN_SOURCE}" "$ROOT/app/bin/opencode"
+        echo "✓ 引擎已复用（${OPENCODE_BIN_SOURCE}）"
+        SKIP_ENGINE_BUILD=1
+    else
     # 用 git init 提供 build 脚本需要的分支信息（tarball 不含 .git）
     (cd "$WORK/src" && git init -q . 2>/dev/null || true)
     (cd "$WORK/src/packages/cli" && \
@@ -60,15 +75,44 @@ if [ "${1:-}" = "--from-source" ]; then
     mkdir -p "$ROOT/app/bin"
     cp "$WORK/src/packages/cli/dist/cli-${BIN_ARCH}/bin/opencode" "$ROOT/app/bin/opencode"
     echo "✓ 引擎已构建（${BIN_ARCH}）"
+    fi
 fi
 
 # --- 依赖准备 ---
 mkdir -p "$ROOT/app/bin"
 
+# 复用已编译引擎（本地迭代用）：显式给出路径即覆盖 app/bin/opencode。
+# 用途：只改打包配置/向导时，不必重建 200MB+ 的引擎。
+# 注意：该引擎必须已包含 docs/patches/ 下的补丁。
+if [ -n "${OPENCODE_BIN_SOURCE:-}" ]; then
+    [ -x "${OPENCODE_BIN_SOURCE}" ] || { echo "ERROR: OPENCODE_BIN_SOURCE 不可执行：${OPENCODE_BIN_SOURCE}" >&2; exit 1; }
+    cp "${OPENCODE_BIN_SOURCE}" "$ROOT/app/bin/opencode"
+    echo "✓ 引擎已复用：${OPENCODE_BIN_SOURCE}"
+fi
+
 if [ ! -x "$ROOT/app/bin/opencode" ]; then
     echo "ERROR: app/bin/opencode 缺失。请先运行：bash scripts/build.sh --from-source" >&2
     exit 1
 fi
+
+# 补丁自检：引擎里必须能找到 cookie 认证与 CSP 补丁的痕迹，
+# 避免复用了旧引擎却发出功能缺失的包（曾因此误发）。
+# 注意：脚本开了 pipefail，`strings | grep -q` 会因 grep 提前退出导致 SIGPIPE，
+# 从而误判为「找不到」。所以先把 strings 输出落盘再 grep。
+ENGINE_STRINGS="$(mktemp)"
+strings -n 8 "$ROOT/app/bin/opencode" > "$ENGINE_STRINGS" 2>/dev/null || true
+if ! grep -q "opencode_auth_token" "$ENGINE_STRINGS"; then
+    rm -f "$ENGINE_STRINGS"
+    echo "ERROR: app/bin/opencode 缺少 session-cookie 补丁（疑似复用了旧引擎）" >&2
+    echo "       请用 --from-source 重新构建" >&2
+    exit 1
+fi
+if ! grep -q "frame-ancestors" "$ENGINE_STRINGS"; then
+    rm -f "$ENGINE_STRINGS"
+    echo "ERROR: app/bin/opencode 缺少 CSP frame-ancestors 补丁" >&2
+    exit 1
+fi
+rm -f "$ENGINE_STRINGS"
 
 chmod +x "$ROOT/app/bin/"* 2>/dev/null || true
 
@@ -109,6 +153,8 @@ for st in wiz:
             fields.add(it["field"])
 if "wizard_auth_password" not in fields:
     sys.exit("ERROR: wizard/install 缺少密码字段（wizard_auth_password）")
+if "wizard_auth_password_confirm" not in fields:
+    sys.exit("ERROR: wizard/install 缺少确认密码字段（wizard_auth_password_confirm）")
 
 cb = open(os.path.join(root, "cmd/install_callback"), encoding="utf-8").read()
 if "opencode_apply_token" not in cb:
