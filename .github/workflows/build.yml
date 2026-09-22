@@ -256,6 +256,7 @@ jobs:
           # 免密模式链路：向导开关 -> install_callback -> _lib.sh -> cmd/main
           assert "opencode_enable_noauth" in cb2, "install_callback 未处理免密开关"
           mainsh = open("/tmp/ci-cmd/cmd/main", encoding="utf-8").read()
+          lib = open("/tmp/ci-cmd/cmd/_lib.sh", encoding="utf-8").read()
           assert "OPENCODE_DISABLE_AUTH" in mainsh, "cmd/main 未接线 OPENCODE_DISABLE_AUTH"
           assert "opencode_noauth_enabled" in lib, "_lib.sh 缺少免密判定"
           # fnpack 对 switch 的 initValue 只接受字符串；布尔值会让整个包校验失败，
@@ -272,7 +273,6 @@ jobs:
           assert "opencode_save_credentials" in cb, "install_callback 未保存向导凭据"
           assert "opencode_apply_token" in cb, "install_callback 未注入 auth_token"
 
-          lib = open("/tmp/ci-cmd/cmd/_lib.sh", encoding="utf-8").read()
           for fn in ("opencode_apply_token", "opencode_make_token", "opencode_save_credentials"):
               assert fn + "()" in lib, "cmd/_lib.sh 缺少 " + fn
 
