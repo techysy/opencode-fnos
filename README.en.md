@@ -28,13 +28,13 @@ Pick the package matching your NAS CPU architecture:
 
 | Arch | File | Devices |
 | :--- | :--- | :--- |
-| x86_64 | `opencode-tui-<version>-x86.fpk` | Most Intel / AMD models |
-| arm64 | `opencode-tui-<version>-arm.fpk` | ARM models |
+| x86_64 | `oc-<version>-x86.fpk` | Most Intel / AMD models |
+| arm64 | `oc-<version>-arm.fpk` | ARM models |
 
 > Current: **v2.0.12** — bundles the official OpenCode v2.0.12 engine
 >
-> The `opencode-tui-` filename prefix is kept for download continuity; the internal
-> app identifier is `oc`.
+> The filename prefix must equal the manifest `appname` (fnOS hard requirement).
+> This app uses `appname = oc`, hence the `oc-` prefix.
 
 ---
 
@@ -89,7 +89,7 @@ http://oc.techysy.fnos.net/
 
 ```bash
 # SSH into the NAS (root required)
-appcgi install /path/to/opencode-tui-2.0.12-x86.fpk
+appcgi install /path/to/oc-2.0.12-x86.fpk
 ```
 
 ---

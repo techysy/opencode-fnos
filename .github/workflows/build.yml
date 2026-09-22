@@ -181,7 +181,8 @@ jobs:
           fnpack build -d .
           VERSION="${{ needs.prepare.outputs.version }}"
           APPNAME="$(sed -n 's/^appname[[:space:]]*=[[:space:]]*\([^[:space:]]*\)/\1/p' manifest | head -1)"
-          OUT="opencode-tui-${VERSION}-${{ matrix.arch }}.fpk"
+          # 文件名前缀必须等于 appname，否则 fnOS 报「不符合系统要求」
+          OUT="${APPNAME}-${VERSION}-${{ matrix.arch }}.fpk"
           mv "${APPNAME}.fpk" "$OUT"
           mkdir -p dist && mv "$OUT" dist/
           ls -lh "dist/$OUT"
@@ -190,7 +191,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
-          OUT="dist/opencode-tui-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.fpk"
+          OUT="dist/oc-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.fpk"
           ARCH="${{ matrix.arch }}"
 
           # 先落盘再比对，避免 tar | grep -q 触发 SIGPIPE(141)
@@ -259,6 +260,16 @@ jobs:
           [ "$PKG_PLATFORM" = "$EXPECT_PLATFORM" ] || {
             echo "::error::platform 为 '${PKG_PLATFORM}'，期望 '${EXPECT_PLATFORM}'"; exit 1; }
 
+          echo "── 文件名前缀 == appname（fnOS 硬性要求）──"
+          # fnOS 安装器要求 fpk 文件名以 manifest 的 appname 开头，
+          # 否则报「不符合系统要求」。这与代码无关，极难排查，故强制校验。
+          PKG_APPNAME="$(tar -xzOf "$OUT" manifest | sed -n 's/^appname[[:space:]]*=[[:space:]]*//p' | tr -d ' ')"
+          BASE="$(basename "$OUT")"
+          case "$BASE" in
+            "${PKG_APPNAME}-"*) echo "  OK appname=$PKG_APPNAME，文件名 $BASE" ;;
+            *) echo "::error::文件名前缀与 appname 不一致（appname=$PKG_APPNAME, 文件=$BASE）"; exit 1 ;;
+          esac
+
           echo "── 版本一致性 ──"
           PKG_VER=$(grep '^version' /tmp/pkg-manifest.txt | sed 's/.*= *//' | tr -d '[:space:]')
           [ "$PKG_VER" = "${{ needs.prepare.outputs.version }}" ] || {
@@ -269,14 +280,14 @@ jobs:
       - name: 生成校验和
         run: |
           cd "$GITHUB_WORKSPACE/dist"
-          sha256sum "opencode-tui-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.fpk" \
+          sha256sum "oc-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.fpk" \
             > "SHA256SUMS-${{ matrix.arch }}"
           cat "SHA256SUMS-${{ matrix.arch }}"
 
       - name: 上传 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: opencode-tui-fpk-${{ matrix.arch }}-${{ github.sha }}
+          name: oc-fpk-${{ matrix.arch }}-${{ github.sha }}
           path: |
             dist/*.fpk
             dist/SHA256SUMS-*
@@ -294,7 +305,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: fpk-assets
-          pattern: opencode-tui-fpk-*
+          pattern: oc-fpk-*
           merge-multiple: true
 
       # 先确保 release 存在且带标题——否则首个 attach 会用裸 tag 名创建它。

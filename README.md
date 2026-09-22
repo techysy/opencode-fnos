@@ -27,12 +27,12 @@
 
 | 架构 | 文件 | 适用设备 |
 | :--- | :--- | :--- |
-| x86_64 | `opencode-tui-<版本>-x86.fpk` | 绝大多数 Intel / AMD 机型 |
-| arm64 | `opencode-tui-<版本>-arm.fpk` | ARM 机型（如部分新硬件） |
+| x86_64 | `oc-<版本>-x86.fpk` | 绝大多数 Intel / AMD 机型 |
+| arm64 | `oc-<版本>-arm.fpk` | ARM 机型（如部分新硬件） |
 
 > 当前版本：**v2.0.12** — 内置官方 OpenCode v2.0.12 引擎
 >
-> 文件名保留 `opencode-tui-` 前缀只为延续下载习惯，包内应用标识为 `oc`。
+> 文件名前缀必须等于 manifest 的 `appname`（fnOS 硬性要求），本应用 `appname = oc`，故文件名以 `oc-` 开头。
 
 ---
 
@@ -85,7 +85,7 @@ http://oc.techysy.fnos.net/
 
 ```bash
 # SSH 到 NAS（需 root）
-appcgi install /path/to/opencode-tui-2.0.12-x86.fpk
+appcgi install /path/to/oc-2.0.12-x86.fpk
 ```
 
 ---

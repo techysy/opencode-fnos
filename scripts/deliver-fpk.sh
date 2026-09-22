@@ -5,9 +5,10 @@ set -euo pipefail
 
 VERSION="${1:-$(tr -d "[:space:]" < "$(dirname "$0")/../VERSION")}"
 ARCH="${2:-x86}"
-FILE="opencode-tui-${VERSION}-${ARCH}.fpk"
+# 文件名前缀必须等于 manifest 的 appname，否则 fnOS 报「不符合系统要求」
+FILE="${APPNAME:-oc}-${VERSION}-${ARCH}.fpk"
 
-DEST="${FPK_DELIVER_DIR:-/vol1/1000/fnOS App/fpk/opencode-tui}"
+DEST="${FPK_DELIVER_DIR:-/vol1/1000/fnOS App/fpk/${APPNAME:-oc}}"
 OLD="${FPK_OLD_DIR:-/vol1/1000/fnOS App/fpk/oldfpk}"
 
 mkdir -p "$DEST" "$OLD"

@@ -59,12 +59,26 @@
 
 > 详见 [`docs/v2-migration-feasibility.md`](docs/v2-migration-feasibility.md)
 
+### 🐛 修复：fpk 文件名必须等于 appname
+
+原先文件名保持 `opencode-tui-*` 而 `appname = oc`，导致 fnOS 应用中心
+报 **「不符合系统要求」** 拒绝安装（与架构、代码均无关）。
+
+fnOS 硬性要求 **fpk 文件名前缀 = manifest 的 appname**，因此文件名改回
+以 appname 开头：`oc-2.0.12-x86.fpk` / `oc-2.0.12-arm.fpk`。
+
+- 构建脚本与 CI 均改为从 `appname` 派生文件名
+- CI 新增校验：文件名前缀必须与 appname 一致（不一致直接失败）
+- `deliver-fpk.sh` 同步适配
+
+> 短地址 <http://oc.techysy.fnos.net/> 不受影响（由 appname 决定）。
+
 ### ⚠️ 升级说明
 
 v1 与 v2 实现不同，需**卸载重装**：
 
 1. 应用中心卸载旧版（1.18.x）
-2. 安装 `opencode-tui-2.0.12-*.fpk`
+2. 安装 `oc-2.0.12-*.fpk`
 3. 应用标识 `oc` 与端口 19282 不变，数据目录 `/vol4/@appdata/oc/` 保留
 
 ---

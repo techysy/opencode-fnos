@@ -117,7 +117,7 @@ rm -f "$APPNAME.fpk"
 fnpack build >/dev/null
 [ -f "$APPNAME.fpk" ] || { echo 'ERROR: 打包失败（未生成 $APPNAME.fpk）' >&2; exit 1; }
 
-OUT="opencode-tui-${UPSTREAM_VERSION}-${PLATFORM}.fpk"
+OUT="${APPNAME}-${UPSTREAM_VERSION}-${PLATFORM}.fpk"
 mv "$APPNAME.fpk" "$OUT"
 echo "✓ 构建完成：$OUT ($(du -h "$OUT" | cut -f1))"
 
