@@ -237,7 +237,7 @@ jobs:
           # 且无日志线索，故在此强制校验整条链路。
           # 注意：wizard/ 在 fpk 外层，ui/ 在 app.tgz 内层
           mkdir -p /tmp/ci-ui /tmp/ci-wiz
-          tar -xzf /tmp/app.tgz -C /tmp/ci-ui ui
+          tar -xzf /tmp/app.tgz -C /tmp/ci-ui ui scripts
           tar -xzf "$OUT" -C /tmp/ci-wiz wizard
           python3 - <<'PYEOF'
           import json, os, re, sys
