@@ -1,0 +1,83 @@
+#!/bin/bash
+# 登录 OpenCode Console 账号 —— 解锁官方免费模型
+#
+# 为什么需要这一步：
+#   免费模型（gemini-3-flash / grok / gpt-*-mini 等）要 OpenCode 账号的 OAuth 凭据。
+#   没有凭据时引擎会发 apiKey="public"，服务端回：
+#     "OpenCode's free tier can only be used from within OpenCode"
+#
+# 为什么不用 `opencode auth login`：
+#   它的 TUI 输出走全屏动画 + 块缓冲，管道里根本读不到验证码。
+#   这里改为直接调 API 拿码、轮询换取 token、按引擎的格式写入数据库。
+#
+# 用法：
+#   /var/apps/opencode/cmd/login           # 登录
+#   /var/apps/opencode/cmd/login --status  # 查看当前登录状态
+#   /var/apps/opencode/cmd/login --logout  # 退出登录
+
+set -uo pipefail
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+. "${DIR}/_lib.sh"
+opencode_resolve_paths
+opencode_resolve_appdir
+
+OPENCODE_BIN="${REAL_APP_DIR}/bin/opencode"
+OC_LOGIN="${REAL_APP_DIR}/scripts/oc-login.py"
+
+opencode_resolve_xdg
+export HOME="${DATA_DIR}"
+export TERM="xterm-256color"
+export OPENCODE_DISABLE_AUTOUPDATE=1
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: 需要 python3（飞牛自带）。请检查 PATH。" >&2
+    exit 1
+fi
+
+if [ ! -f "${OC_LOGIN}" ]; then
+    echo "ERROR: 缺少 ${OC_LOGIN}" >&2
+    exit 1
+fi
+
+case "${1:-}" in
+    --help|-h|help)
+        sed -n "2,18p" "$0" | sed "s/^# \{0,1\}//"
+        exit 0
+        ;;
+    --status|status)
+        echo "数据目录 : ${DATA_DIR}"
+        echo "凭据库   : $(dirname "${XDG_DATA_HOME}")/share/opencode"
+        echo
+        python3 "${OC_LOGIN}" --status
+        exit $?
+        ;;
+    --logout|logout)
+        python3 "${OC_LOGIN}" --logout
+        echo
+        echo "重启生效：/var/apps/opencode/cmd/main restart"
+        exit 0
+        ;;
+esac
+
+echo "═══════════════════════════════════════════════════════════"
+echo "  登录 OpenCode 账号（解锁官方免费模型）"
+echo "═══════════════════════════════════════════════════════════"
+
+python3 "${OC_LOGIN}" --login
+rc=$?
+
+if [ "$rc" = 0 ]; then
+    echo
+    echo "  重启服务让免费模型生效..."
+    if "${DIR}/main" restart >/dev/null 2>&1; then
+        echo "  ✅ 已重启。刷新网页，在模型列表选带 free 标记的模型即可。"
+    else
+        echo "  ⚠️  自动重启失败，请手动执行："
+        echo "      /var/apps/opencode/cmd/main restart"
+    fi
+else
+    echo
+    echo "  重试：/var/apps/opencode/cmd/login"
+fi
+exit "$rc"
