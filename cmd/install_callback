@@ -26,6 +26,18 @@ if [ ! -x "${REAL_APP_DIR}/bin/opencode" ]; then
     exit 0
 fi
 
+# --- 免密模式：勾选后不做任何鉴权 ---
+if [ "${wizard_disable_auth:-}" = "true" ] || [ "${wizard_disable_auth:-}" = "1" ] || [ "${wizard_disable_auth:-}" = "on" ]; then
+    opencode_enable_noauth
+    opencode_clear_token >> "${LOG}" 2>&1 || true
+    echo "[$(date '+%F %T')] 免密模式已启用，跳过凭据写入" >> "${LOG}"
+    if "${DIR}/main" start; then
+        echo "[$(date '+%F %T')] install_callback: service started (no-auth)" >> "${LOG}"
+    fi
+    exit 0
+fi
+opencode_disable_noauth
+
 # --- 校验：两次密码必须一致 ---
 # 安装向导没有原生「二次确认」校验，这里自行比对。
 # 不一致时【不写入凭据、不改桌面入口、不启动服务】，直接失败退出，

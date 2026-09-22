@@ -130,7 +130,7 @@ jobs:
           #   fnos-adaptation:     CSP 加 frame-ancestors，允许飞牛桌面跨源 iframe 嵌入
           #   fnos-session-cookie: iframe 发不了 Basic 头，改为下发 HttpOnly Cookie
           #                        （解决登录不进去 / 刷新掉登录）
-          for p in fnos-adaptation fnos-session-cookie; do
+          for p in fnos-adaptation fnos-session-cookie fnos-noauth; do
             patch -p1 --forward < "$GITHUB_WORKSPACE/docs/patches/${p}.patch"
           done
 
@@ -252,6 +252,21 @@ jobs:
           assert "wizard_auth_password_confirm" in fields, "wizard/install 缺少确认密码字段"
           cb2 = open("/tmp/ci-cmd/cmd/install_callback", encoding="utf-8").read()
           assert "两次输入的密码不一致" in cb2, "install_callback 未校验两次密码一致"
+          assert "wizard_disable_auth" in fields, "wizard/install 缺少免密开关"
+          # 免密模式链路：向导开关 -> install_callback -> _lib.sh -> cmd/main
+          assert "opencode_enable_noauth" in cb2, "install_callback 未处理免密开关"
+          mainsh = open("/tmp/ci-cmd/cmd/main", encoding="utf-8").read()
+          assert "OPENCODE_DISABLE_AUTH" in mainsh, "cmd/main 未接线 OPENCODE_DISABLE_AUTH"
+          assert "opencode_noauth_enabled" in lib, "_lib.sh 缺少免密判定"
+          # fnpack 对 switch 的 initValue 只接受字符串；布尔值会让整个包校验失败，
+          # 报错信息只说 "install is not valid"，很难定位，这里提前拦住。
+          for st in wiz:
+              for it in st.get("items", []):
+                  if it.get("type") == "switch":
+                      iv = it.get("initValue")
+                      assert not isinstance(iv, bool), (
+                          "wizard/install 的 switch.initValue 不能是布尔值（fnpack 会拒绝整个包）"
+                      )
 
           cb = open("/tmp/ci-cmd/cmd/install_callback", encoding="utf-8").read()
           assert "opencode_save_credentials" in cb, "install_callback 未保存向导凭据"

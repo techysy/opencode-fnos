@@ -155,19 +155,36 @@ sudo -u oc OPENCODE_WORKSPACE=/vol1/1000/my-project \
 
 ### 鉴权说明
 
-v2 默认强制鉴权（未配置也会随机生成密码）。飞牛桌面用 `<iframe>` 嵌入，
-**无法发送 Basic 认证头**，因此：
+安装向导里有一个 **「不设置密码（免密访问）」** 开关，两种模式任选：
 
-- **安装向导填写密码 + 确认密码**（用户名固定 `opencode`，引擎硬编码不可改；留空自动生成）
-  两次输入不一致会中止安装，不会留下半成品
+#### 模式一：免密（推荐自用）
+
+打开开关即可。引擎完全不启用鉴权，**桌面点开图标直接进，不弹任何登录框**。
+
+- 适合只在家庭内网使用
+- 桌面入口的 `url` 就是干净的 `/`
+- 想改回带密码：重新安装时关掉开关
+
+#### 模式二：设置密码
+
+填写 **密码 + 确认密码**（用户名固定 `opencode`，引擎硬编码不可改；留空自动生成）。
+两次输入不一致会**中止安装**，不会留下半成品。
+
 - 密码保存在 `/vol4/@appdata/opencode/credentials`，可用 `OPENCODE_PASSWORD` 环境变量临时覆盖
 - `app/ui/config` 的 `url` 带上 `?auth_token=<base64(opencode:密码)>`
 - **会话 Cookie**：首次带 token 访问时下发 `HttpOnly` Cookie。
   因为前端加载后会把 token 从地址栏抹掉，iframe 内刷新/跳转本会丢鉴权，
   现在后续请求凭 Cookie 自动认证（这是「登录不进去」的根因）
+- Cookie 值尾部可能带 `=`（base64 padding），部分代理会剥掉它 —— 解码端已容错，带不带都能登录
 
 > 安装时由 `cmd/install_callback` 自动把密码写入 `ui/config` 的 token，
 > 无需手工同步。构建脚本与 CI 会强制校验整条链路完整。
+
+#### 免密模式的技术细节
+
+免密靠 `OPENCODE_DISABLE_AUTH=1` 实现，由 `cmd/main` 自动导出（标记文件为
+`/vol4/@appdata/opencode/noauth`）。引擎侧走 `ServerAuth.Config.layer`（`Option.none`），
+等价于上游 `createEmbeddedRoutes` 的行为 —— **不是把密码设成空串绕过去**。
 
 ---
 

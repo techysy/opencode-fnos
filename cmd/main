@@ -38,6 +38,11 @@ log() { echo "[$(date '+%F %T')] $*" >> "${LOG}" 2>&1; }
 AUTH_USER="opencode"
 PASSWORD=""
 
+# 免密模式：置位后引擎完全不做鉴权（OPENCODE_DISABLE_AUTH=1），
+# 桌面 iframe 无需 token 直接打开，也不再需要输入密码。
+NOAUTH=0
+opencode_noauth_enabled && NOAUTH=1
+
 CRED_FILE="$(opencode_cred_file)"
 if [ -f "${CRED_FILE}" ]; then
     AUTH_USER="$(sed -n 's/^user=//p' "${CRED_FILE}" | head -1)"
@@ -48,7 +53,7 @@ fi
 # 环境变量可覆盖（便于调试）
 PASSWORD="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-${PASSWORD}}}"
 
-if [ -z "${PASSWORD}" ]; then
+if [ "$NOAUTH" = 0 ] && [ -z "${PASSWORD}" ]; then
     # 兜底：老版本升级上来的场景，数据目录里还没有 credentials
     # 此时生成一个并立刻同步到 ui/config，避免桌面图标 401 白屏
     log "WARN: 未找到凭据，生成随机密码"
@@ -61,7 +66,22 @@ fi
 export AUTH_USER
 # 注意：OpenCode 的用户名是硬编码的 "opencode"（见 packages/server/src/auth.ts），
 # 这里 AUTH_USER 仅用于生成 auth_token，实际登录名始终是 opencode。
-export OPENCODE_PASSWORD="${PASSWORD}"
+if [ "$NOAUTH" = 1 ]; then
+    export OPENCODE_DISABLE_AUTH=1
+    unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
+    log "免密模式已启用：引擎不做鉴权"
+else
+    # 数据隔离：XDG 目录全部指向应用数据目录
+    opencode_resolve_xdg
+    export TERM="xterm-256color"
+    export HOME="${DATA_DIR}"
+    if [ "$NOAUTH" = 1 ]; then
+        export OPENCODE_DISABLE_AUTH=1
+        unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
+    else
+        export OPENCODE_PASSWORD="${PASSWORD}"
+    fi
+fi
 
 start() {
     mkdir -p "${DATA_DIR}" "${WORKSPACE}" 2>/dev/null
@@ -88,7 +108,12 @@ start() {
     opencode_resolve_xdg
     export TERM="xterm-256color"
     export HOME="${DATA_DIR}"
-    export OPENCODE_PASSWORD="${PASSWORD}"
+    if [ "$NOAUTH" = 1 ]; then
+        export OPENCODE_DISABLE_AUTH=1
+        unset OPENCODE_PASSWORD OPENCODE_SERVER_PASSWORD
+    else
+        export OPENCODE_PASSWORD="${PASSWORD}"
+    fi
     # 禁止自更新：应用由 fpk 管理，引擎不应自我改写
     export OPENCODE_DISABLE_AUTOUPDATE=1
 

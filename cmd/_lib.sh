@@ -145,3 +145,47 @@ opencode_save_credentials() {
     ( umask 077; printf 'user=%s\npass=%s\n' "$user" "$pass" > "$cred" ) 2>/dev/null || true
     printf '%s\n%s\n' "$user" "$pass"
 }
+# ── 免密模式（no-auth）──────────────────────────────────────────────────────
+# 引擎侧由 OPENCODE_DISABLE_AUTH=1 控制：置位后 routes 走 ServerAuth.Config.layer，
+# 完全不做鉴权，桌面 iframe 无需任何 token 即可打开。
+# 这里用 DATA_DIR 下的标记文件记录用户选择，避免每次都读环境变量。
+opencode_noauth_flag() { printf '%s/noauth' "${DATA_DIR}"; }
+
+opencode_noauth_enabled() {
+    # 优先级：环境变量 > 标记文件
+    case "${OPENCODE_DISABLE_AUTH:-}" in
+        1|true|yes|on) return 0 ;;
+    esac
+    [ -f "$(opencode_noauth_flag)" ]
+}
+
+opencode_enable_noauth() {
+    mkdir -p "${DATA_DIR}" 2>/dev/null || true
+    ( umask 022; : > "$(opencode_noauth_flag)" ) 2>/dev/null || true
+}
+
+opencode_disable_noauth() {
+    rm -f "$(opencode_noauth_flag)" 2>/dev/null || true
+}
+
+# 免密时把桌面入口的 ?auth_token= 去掉，避免带一个无意义的 token
+opencode_clear_token() {
+    local cfg
+    for cfg in "${REAL_APP_DIR}/ui/config" "${APP_DIR}/ui/config" "${APP_DIR}/target/ui/config"; do
+        [ -f "$cfg" ] || continue
+        local realdir
+        realdir="$(dirname "$(dirname "$(readlink -f "$cfg")")")"
+        [ -x "${realdir}/bin/opencode" ] || continue
+        [ "$realdir" = "$(readlink -f "${REAL_APP_DIR}")" ] || continue
+        python3 -c "
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+for v in d.get('.url', {}).values():
+    if isinstance(v, dict) and 'url' in v:
+        v['url'] = '/'
+json.dump(d, open(p, 'w'), ensure_ascii=False, indent=2)
+" "$cfg" 2>/dev/null && return 0
+    done
+    return 0
+}

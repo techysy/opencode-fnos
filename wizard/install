@@ -11,11 +11,17 @@
         "helpText": "登录用户名固定为 opencode（引擎内置，不可更改）。"
       },
       {
+        "type": "switch",
+        "field": "wizard_disable_auth",
+        "label": "不设置密码（免密访问）"
+      },
+      {
         "type": "password",
         "field": "wizard_auth_password",
         "label": "登录密码",
         "initValue": "",
-        "tip": "登录 OpenCode Web 界面用的密码（用户名固定为 opencode）。留空则自动生成随机强密码并写入数据目录。"
+        "tip": "登录 OpenCode Web 界面用的密码（用户名固定为 opencode）。留空则自动生成随机强密码并写入数据目录。",
+        "required": false
       },
       {
         "type": "password",

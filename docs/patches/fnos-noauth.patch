@@ -1,0 +1,68 @@
+diff --git a/packages/cli/src/server-process.ts b/packages/cli/src/server-process.ts
+--- a/packages/cli/src/server-process.ts
++++ b/packages/cli/src/server-process.ts
+@@ -72,12 +72,18 @@
+         delete process.env.OPENCODE_SERVER_PASSWORD
+       }
+       const password =
+-        options.mode === "service"
+-          ? config.password || randomBytes(32).toString("base64url")
+-          : environmentPassword
+-            ? Redacted.value(environmentPassword)
+-            : randomBytes(32).toString("base64url")
+-      if (!password) return yield* Effect.fail(new Error("Missing server password"))
++        // fnOS: explicit switch for passwordless desktop/iframe setups.
++        // When enabled, routes.ts takes ServerAuth.Config.layer (Option.none),
++        // which disables authentication entirely. Unset keeps upstream behavior.
++        process.env.OPENCODE_DISABLE_AUTH === "1"
++          ? ""
++          : options.mode === "service"
++            ? config.password || randomBytes(32).toString("base64url")
++            : environmentPassword
++              ? Redacted.value(environmentPassword)
++              : randomBytes(32).toString("base64url")
++      // Empty string is intentional when auth is disabled; only undefined is an error.
++      if (password === undefined) return yield* Effect.fail(new Error("Missing server password"))
+       const instanceID = randomUUID()
+       const transform = yield* WebUi.handler()
+       const server = yield* start(
+diff --git a/packages/server/src/process.ts b/packages/server/src/process.ts
+--- a/packages/server/src/process.ts
++++ b/packages/server/src/process.ts
+@@ -55,7 +55,8 @@
+   transform?: Transform,
+ ) {
+   const password = options.password
+-  if (!password) return yield* Effect.fail(new Error("Missing server password"))
++  // Empty string is intentional when auth is disabled; only undefined is an error.
++  if (password === undefined) return yield* Effect.fail(new Error("Missing server password"))
+   const hostname = options.hostname ?? "127.0.0.1"
+   const port = Option.fromNullishOr(options.port)
+   const shutdown = yield* Latch.make()
+@@ -185,7 +186,11 @@
+   urls: () => ReadonlyArray<string>,
+   tmp: string,
+ ): App {
+-  const auth = ServerAuth.Config.of({ password: Option.some(password), username: "opencode" })
++  // fnOS: an empty password means auth is explicitly disabled (Option.none).
++  const auth =
++    password === ""
++      ? ServerAuth.Config.of({ password: Option.none(), username: "opencode" })
++      : ServerAuth.Config.of({ password: Option.some(password), username: "opencode" })
+   return Effect.gen(function* () {
+     const request = yield* HttpServerRequest.HttpServerRequest
+     const url = new URL(request.url, "http://localhost")
+diff --git a/packages/server/src/middleware/authorization.ts b/packages/server/src/middleware/authorization.ts
+--- a/packages/server/src/middleware/authorization.ts
++++ b/packages/server/src/middleware/authorization.ts
+@@ -56,6 +56,10 @@
+ }
+ 
+ export function authorizedRequest(request: HttpServerRequest.HttpServerRequest, config: ServerAuth.Info) {
++  // When no password is configured, authentication is disabled entirely.
++  // dispatch() calls this directly (bypassing authorizationLayer), so the
++  // check must be repeated here or every request would be rejected.
++  if (!ServerAuth.required(config)) return Effect.succeed(true)
+   return credentialFromRequest(request).pipe(Effect.map((credential) => ServerAuth.authorized(credential, config)))
+ }
+ 

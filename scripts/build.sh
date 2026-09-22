@@ -46,7 +46,7 @@ if [ "${1:-}" = "--from-source" ]; then
     # fnos-session-cookie:  iframe 发不了 Basic 认证头，且页面加载后会把 ?auth_token=
     #                       从地址栏抹掉；改为首次访问下发 HttpOnly Cookie，后续请求凭
     #                       Cookie 认证，解决「登录不进去 / 刷新即掉登录」
-    for p in fnos-adaptation fnos-session-cookie; do
+    for p in fnos-adaptation fnos-session-cookie fnos-noauth; do
         (cd "$WORK/src" && patch -p1 --forward < "$ROOT/docs/patches/${p}.patch")
     done
 
@@ -110,6 +110,13 @@ fi
 if ! grep -q "frame-ancestors" "$ENGINE_STRINGS"; then
     rm -f "$ENGINE_STRINGS"
     echo "ERROR: app/bin/opencode 缺少 CSP frame-ancestors 补丁" >&2
+    exit 1
+fi
+
+if ! grep -q "OPENCODE_DISABLE_AUTH" "$ENGINE_STRINGS"; then
+    rm -f "$ENGINE_STRINGS"
+    echo "ERROR: app/bin/opencode 缺少免密模式补丁（fnos-noauth）" >&2
+    echo "       请用 --from-source 重新构建" >&2
     exit 1
 fi
 rm -f "$ENGINE_STRINGS"
