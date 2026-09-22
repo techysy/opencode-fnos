@@ -31,41 +31,54 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 ## 桌面图标点开是空白 / 401
 
 v2 默认强制鉴权。飞牛桌面用 iframe 嵌入，**无法发送 Basic 认证头**，
-必须靠 URL 里的 `?auth_token=` 通过。若两处不一致就会白屏：
+必须靠 `ui/config` 里的 `?auth_token=<base64(opencode:密码)>` 自动登录。
+
+**密码来源**：安装时在向导「账号密码」步骤填写（用户名固定 `opencode`）。
+`cmd/install_callback` 会把它写进：
 
 | 位置 | 内容 |
 | :--- | :--- |
-| `/var/apps/opencode/ui/config` | `url` 里的 `?auth_token=...` |
-| `/var/apps/opencode/cmd/main` | `PASSWORD="\${OPENCODE_PASSWORD:-\${OPENCODE_SERVER_PASSWORD:-oc-fnos}}"` |
+| `/vol4/@appdata/opencode/credentials` | 明文凭据（`user=` / `pass=`，权限 600） |
+| `/var/apps/opencode/ui/config` | `url` 里的 `?auth_token=...`（安装时自动生成） |
+
+安装后这两处由脚本自动保持同步，**正常无需手工干预**。
 
 **排查**：
 
 ```bash
-# 查看当前 token 解出来是什么
+# 1. 看保存的凭据
+cat /vol4/@appdata/opencode/credentials
+
+# 2. 看桌面入口的 token 并解码对比
 python3 - <<'EOF'
 import base64, json, re
 cfg = json.load(open("/var/apps/opencode/ui/config"))
-url = cfg[".url"]["oc.Application"]["url"]
-tok = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url).group(1)
-print("token    :", tok)
-print("decoded  :", base64.b64decode(tok).decode())
+entry = list(cfg[".url"].values())[0]
+tok = re.search(r"auth_token=([A-Za-z0-9+/=]+)", entry["url"]).group(1)
+print("token   :", tok)
+print("decoded :", base64.b64decode(tok).decode())
 EOF
-
-# 查看 cmd/main 内置密码
-grep -o 'OPENCODE_SERVER_PASSWORD:-[^}]*' /var/apps/opencode/cmd/main
 ```
 
-两者必须一致（格式为 `opencode:密码`）。构建脚本与 CI 都会强制校验，
-若你手工改过其中一个，请同步另一个。
+解码结果应为 `opencode:<credentials 里的 pass>`。若不一致，重启一次即可自愈：
 
-> **临时绕过**：设置固定密码后重启，并手工拼 token
-> ```bash
-> sudo -u oc OPENCODE_PASSWORD=mysecret /var/apps/opencode/cmd/main restart
-> printf 'opencode:mysecret' | base64    # 用这个值替换 ui/config 的 auth_token
-> ```
+```bash
+/var/apps/opencode/cmd/main restart
+```
 
----
+（`cmd/main` 启动时会读 `credentials`；文件缺失时自动生成新密码并同步 token。）
 
+### 忘记密码 / 想改密码
+
+```bash
+# 方式一：改凭据文件后重启（程序会自动同步 token）
+sudo sh -c 'printf "user=opencode\npass=新密码\n" > /vol4/@appdata/opencode/credentials'
+sudo chmod 600 /vol4/@appdata/opencode/credentials
+/var/apps/opencode/cmd/main restart
+
+# 方式二：环境变量临时覆盖（重启后仍回到 credentials 的值）
+sudo -u opencode OPENCODE_PASSWORD=临时密码 /var/apps/opencode/cmd/main restart
+```
 ## 点击图标能打开但内容不显示 / 白屏
 
 1. **确认 CSP**（iframe 能否嵌入的关键）：
@@ -125,7 +138,8 @@ v2 的交互终端走 `/api/pty/<id>/connect`（WebSocket）。该端点用**一
 
 ```bash
 # 确认 PTY 接口本身可用
-curl -s -u opencode:oc-fnos http://127.0.0.1:19282/api/pty
+# 密码换成你安装时设的（见 /vol4/@appdata/opencode/credentials）
+curl -s -u opencode:你的密码 http://127.0.0.1:19282/api/pty
 
 # 确认宿主机有 pty 设备
 ls /dev/pts/

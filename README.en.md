@@ -132,10 +132,13 @@ Only **one** change, see [`docs/patches/fnos-adaptation.patch`](docs/patches/fno
 v2 enforces auth by default (a random password is generated if unset). The fnOS desktop
 embeds via `<iframe>`, which **cannot send a Basic auth header**, therefore:
 
-- `cmd/main` embeds a fixed password (override with `OPENCODE_PASSWORD`)
+- **Set the password in the install wizard** (username is fixed to `opencode`,
+  hardcoded by the engine; leave blank to auto-generate)
+- Stored in `/vol4/@appdata/opencode/credentials`; override with `OPENCODE_PASSWORD`
 - `app/ui/config`'s `url` carries `?auth_token=<base64(opencode:password)>`
 
-> These two must match, otherwise the page shows a **401 blank screen**. Both the build
+> `cmd/install_callback` writes the password into the `ui/config` token automatically at
+> install time — no manual sync needed. The build script and CI validate the whole chain.
 > script and CI enforce this.
 
 ---

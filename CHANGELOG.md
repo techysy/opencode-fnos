@@ -19,19 +19,21 @@
   - ❌ 移除「静态资源免鉴权」（改用上游自带的 `?auth_token=`）
   - ✅ 仅保留「CSP 增加 `frame-ancestors *`」（跨源 iframe 必需）
 - **鉴权模型变化**：v2 默认强制鉴权（未设密码也会随机生成）
-  - `cmd/main` 内置固定密码，`app/ui/config` 用 `?auth_token=` 传递
-  - 构建脚本与 CI 强制校验两者一致（不一致会导致 401 白屏）
+  - 密码在**安装向导**中填写（用户名固定 `opencode`，引擎硬编码；留空自动生成）
+  - 存于 `/vol4/@appdata/opencode/credentials`，由 `cmd/install_callback` 自动同步到
+    `app/ui/config` 的 `?auth_token=`，桌面图标点开即自动登录
+  - 构建脚本与 CI 强制校验整条凭据链路完整
 
 ### ✨ 功能
 
 - 🖥️ **官方原生 Web UI**：Solid.js SPA，非重制界面
-- 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=oc`
-- 🌐 **短地址访问**：`appname` 为 `oc`，可用 <http://opencode.techysy.fnos.net/> 直达
+- 🖱️ **飞牛桌面集成**：桌面图标一键打开，`appname=opencode`
+- 🌐 **短地址访问**：<http://opencode.techysy.fnos.net/> 直达
 - 📡 **实时通道用 SSE**：事件流为 Server-Sent Events（带心跳、`X-Accel-Buffering: no`），
   对 iframe 与反向代理比 WebSocket 更友好
-- 🔒 **数据隔离**：独立系统用户 `oc`，数据存于 `/vol4/@appdata/opencode/`
+- 🔒 **数据隔离**：独立系统用户 `opencode`，数据存于 `/vol4/@appdata/opencode/`
 - 🗂️ **XDG 目录隔离**：config/data/cache/state 全部指向应用数据目录
-- 🤝 **可与其他版本共存**：`appname=oc`，端口 **19282**，与 mimocode(19280/19281) 互不冲突
+- 🤝 **可与其他版本共存**：端口 **19282**，与 mimocode(19280/19281) 互不冲突
 - 📜 **安装协议授权向导**：首次安装需勾选同意 7 项条款
 - 🎨 **品牌化**：OpenCode 图标（64/128/256 三档）
 - 🧭 **不写死卷路径**：`cmd/_lib.sh` 自动推导，兼容不同 fnOS 部署布局
@@ -40,7 +42,7 @@
 
 - **构建链路更新**：构建入口从 `packages/opencode` 移到 `packages/cli`；
   bun 要求 1.3.14 → **1.4.2**；产物 `dist/cli-linux-x64/bin/opencode`（214 MB）
-- **CI 更新**：bun 固定 1.4.2；新增 `auth_token` 与内置密码一致性校验；
+- **CI 更新**：bun 固定 1.4.2；新增凭据链路完整性校验；
   移除 ttyd 与页面语法校验；新增「不应包含 bin/ttyd」的负向校验
 - **`check-upstream.sh` 修复**：v2 上游**只打 tag、不建 release**，
   旧脚本查 releases API 会漏检；现同时查询 releases 与 tags
