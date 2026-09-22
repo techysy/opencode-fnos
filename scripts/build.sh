@@ -83,27 +83,45 @@ echo "✓ platform = ${PLATFORM}"
 
 echo "📦 即将打包：${APPNAME} v${UPSTREAM_VERSION} (${PLATFORM})"
 
-# --- 校验：ui/config 的 auth_token 必须与 cmd/main 的内置密码一致 ---
-# 二者不一致会导致飞牛桌面 iframe 打开后 401（白屏），且没有任何日志线索。
+# --- 校验：桌面入口与安装期凭据注入的约定 ---
+# 凭据在【安装时】由向导提供（wizard_auth_user / wizard_auth_password），
+# 由 cmd/install_callback 写入 ${DATA_DIR}/credentials 并改写 ui/config 的 token。
+# 因此包内 ui/config 的 token 只是占位值，这里校验的是“链路是否完整”：
+#   app/ui/config 存在且带 auth_token 占位
+#   wizard/install 提供账号密码字段
+#   cmd/install_callback 会调用 opencode_apply_token
 if [ -f "$ROOT/app/ui/config" ]; then
     python3 - "$ROOT" <<'PYEOF'
-import base64, json, re, sys, os
+import json, re, sys, os
 root = sys.argv[1]
+
 cfg = json.load(open(os.path.join(root, "app/ui/config")))
 entry = list(cfg[".url"].values())[0]
-url = entry["url"]
-m = re.search(r"auth_token=([A-Za-z0-9+/=]+)", url)
-if not m:
-    sys.exit("ERROR: app/ui/config 的 url 缺少 auth_token")
-decoded = base64.b64decode(m.group(1)).decode()
-user, pw = decoded.split(":", 1)
-main = open(os.path.join(root, "cmd/main"), encoding="utf-8").read()
-mm = re.search(r"OPENCODE_SERVER_PASSWORD:-([^}]*)", main)
-if not mm:
-    sys.exit("ERROR: cmd/main 未找到内置密码")
-if pw != mm.group(1):
-    sys.exit("ERROR: ui/config 的 token 密码(%s) 与 cmd/main 内置密码(%s) 不一致" % (pw, mm.group(1)))
-print("✓ auth_token 与内置密码一致")
+url = entry.get("url", "")
+if "auth_token=" not in url:
+    sys.exit("ERROR: app/ui/config 的 url 缺少 auth_token 占位")
+
+wiz = json.load(open(os.path.join(root, "wizard/install")))
+fields = set()
+for st in wiz:
+    for it in st.get("items", []):
+        if it.get("field"):
+            fields.add(it["field"])
+if "wizard_auth_password" not in fields:
+    sys.exit("ERROR: wizard/install 缺少密码字段（wizard_auth_password）")
+
+cb = open(os.path.join(root, "cmd/install_callback"), encoding="utf-8").read()
+if "opencode_apply_token" not in cb:
+    sys.exit("ERROR: cmd/install_callback 未注入 auth_token（缺 opencode_apply_token）")
+if "opencode_save_credentials" not in cb:
+    sys.exit("ERROR: cmd/install_callback 未保存向导凭据")
+
+lib = open(os.path.join(root, "cmd/_lib.sh"), encoding="utf-8").read()
+for fn in ("opencode_apply_token", "opencode_make_token", "opencode_save_credentials"):
+    if fn + "()" not in lib:
+        sys.exit("ERROR: cmd/_lib.sh 缺少函数 " + fn)
+
+print("✓ 凭据链路完整（wizard -> install_callback -> ui/config）")
 PYEOF
 fi
 

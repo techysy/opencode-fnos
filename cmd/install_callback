@@ -1,6 +1,11 @@
 #!/bin/bash
-# 安装后置：确保数据目录可写 + 主动拉起服务
-# 经验来源：飞牛应用中心安装后不一定自启，需在此主动 start
+# 安装后置：写入向导填写的账号密码 → 同步桌面入口的 auth_token → 拉起服务
+#
+# 为什么需要这一步：
+#   v2 引擎强制鉴权，而飞牛桌面用 <iframe> 嵌入、无法发送 Basic 认证头，
+#   只能靠 app/ui/config 的 url 带 ?auth_token=<base64(user:pass)>。
+#   该 url 在打包时是静态占位值，必须在这里按用户实际填写的凭据改写，
+#   否则点开桌面图标会 401 白屏。
 set -uo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,25 +14,34 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 opencode_resolve_paths
 opencode_resolve_appdir
 
-mkdir -p "${DATA_DIR}"
+mkdir -p "${DATA_DIR}" 2>/dev/null || true
 chmod 755 "${DATA_DIR}" 2>/dev/null || true
 
 echo "[$(date '+%F %T')] install_callback start (APP_DIR=${APP_DIR}, DATA_DIR=${DATA_DIR})" >> "${LOG}"
 
-# 检查关键文件
-missing=0
-for f in "${REAL_APP_DIR}/bin/opencode" "${REAL_APP_DIR}/bin/ttyd"; do
-    if [ ! -x "$f" ]; then
-        echo "[$(date '+%F %T')] ERROR: missing or not executable: $f" >> "${LOG}"
-        missing=1
-    fi
-done
-if [ "$missing" -eq 1 ]; then
+# 检查关键文件（v2 只需 opencode，不再有 ttyd）
+if [ ! -x "${REAL_APP_DIR}/bin/opencode" ]; then
+    echo "[$(date '+%F %T')] ERROR: missing or not executable: ${REAL_APP_DIR}/bin/opencode" >> "${LOG}"
     echo "WARNING: 关键二进制缺失，请检查安装包完整性" >&2
     exit 0
 fi
 
-# 主动拉起服务
+# --- 写入向导凭据 ---
+# opencode_save_credentials 打印两行：用户名、密码
+CREDS="$(opencode_save_credentials opencode "")"
+AUTH_USER="$(printf '%s' "${CREDS}" | sed -n '1p')"
+AUTH_PASS="$(printf '%s' "${CREDS}" | sed -n '2p')"
+
+if [ -n "${AUTH_PASS}" ]; then
+    TOKEN="$(opencode_make_token "${AUTH_USER}" "${AUTH_PASS}")"
+    opencode_apply_token "${TOKEN}" >> "${LOG}" 2>&1 || true
+    echo "[$(date '+%F %T')] credentials saved (user=${AUTH_USER}), token applied" >> "${LOG}"
+else
+    echo "[$(date '+%F %T')] WARN: 未能生成凭据，桌面入口保持包内默认值" >> "${LOG}"
+fi
+
+# --- 主动拉起服务 ---
+# 经验来源：飞牛应用中心安装后不一定自启，需在此主动 start
 if "${DIR}/main" start; then
     echo "[$(date '+%F %T')] install_callback: service started" >> "${LOG}"
 else

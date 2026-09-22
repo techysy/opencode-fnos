@@ -23,20 +23,45 @@ OPENCODE_BIN="${REAL_APP_DIR}/bin/opencode"
 log() { echo "[$(date '+%F %T')] $*" >> "${LOG}" 2>&1; }
 
 # ---------------------------------------------------------------------------
-# 服务密码
+# 账号与密码
 #
-# v2 默认强制鉴权：未设密码时会随机生成，导致整站 401。
-# 飞牛桌面用 iframe 嵌入且无法发送 Basic 头，因此这里固定一个密码，
-# 并在 app/ui/config 的 url 中带上 ?auth_token=<base64(user:pass)>。
-# 用户名固定为 opencode（见 packages/server/src/auth.ts）。
+# v2 默认强制鉴权，且飞牛桌面用 iframe 嵌入、发不了 Basic 头，
+# 只能靠 ui/config 里的 ?auth_token=<base64(user:pass)>。
+#
+# 凭据来源优先级（高 → 低）：
+#   1. 环境变量 OPENCODE_PASSWORD / OPENCODE_SERVER_PASSWORD
+#   2. ${DATA_DIR}/credentials（安装向导填写，由 install_callback 写入）
+#   3. 兜底默认值（仅用于极端情况，正常情况下不会走到）
+#
+# 见 cmd/_lib.sh 的 opencode_save_credentials / opencode_apply_token。
 # ---------------------------------------------------------------------------
-# 固定密码：app/ui/config 的 url 已内置 ?auth_token=<base64(opencode:此密码)>，
-# 两者必须一致，否则飞牛桌面 iframe 会 401。
-PASSWORD="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-oc-fnos}}"
+AUTH_USER="opencode"
+PASSWORD=""
 
-# 高级用法：可用数据目录下的 .password 覆盖（此时需同步修改 ui/config 的 token）
-PASSWORD_FILE="${DATA_DIR}/.password"
-[ -f "${PASSWORD_FILE}" ] && PASSWORD="$(cat "${PASSWORD_FILE}")"
+CRED_FILE="$(opencode_cred_file)"
+if [ -f "${CRED_FILE}" ]; then
+    AUTH_USER="$(sed -n 's/^user=//p' "${CRED_FILE}" | head -1)"
+    PASSWORD="$(sed -n 's/^pass=//p' "${CRED_FILE}" | head -1)"
+fi
+[ -n "${AUTH_USER}" ] || AUTH_USER="opencode"
+
+# 环境变量可覆盖（便于调试）
+PASSWORD="${OPENCODE_PASSWORD:-${OPENCODE_SERVER_PASSWORD:-${PASSWORD}}}"
+
+if [ -z "${PASSWORD}" ]; then
+    # 兜底：老版本升级上来的场景，数据目录里还没有 credentials
+    # 此时生成一个并立刻同步到 ui/config，避免桌面图标 401 白屏
+    log "WARN: 未找到凭据，生成随机密码"
+    AUTH_USER="opencode"
+    PASSWORD="$(head -c 18 /dev/urandom | base64 | tr -d "=+/" | cut -c1-20)"
+    ( umask 077; printf 'user=%s\npass=%s\n' "${AUTH_USER}" "${PASSWORD}" > "${CRED_FILE}" ) 2>/dev/null || true
+    opencode_apply_token "$(opencode_make_token "${AUTH_USER}" "${PASSWORD}")" 2>/dev/null || true
+fi
+
+export AUTH_USER
+# 注意：OpenCode 的用户名是硬编码的 "opencode"（见 packages/server/src/auth.ts），
+# 这里 AUTH_USER 仅用于生成 auth_token，实际登录名始终是 opencode。
+export OPENCODE_PASSWORD="${PASSWORD}"
 
 start() {
     mkdir -p "${DATA_DIR}" "${WORKSPACE}" 2>/dev/null

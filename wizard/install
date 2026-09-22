@@ -1,5 +1,25 @@
 [
   {
+    "stepTitle": "账号密码",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "OpenCode 内置 Web 界面需要登录。请设置账号密码——飞牛桌面点开图标时用同一份凭据自动登录，不会重复弹窗。"
+      },
+      {
+        "type": "tips",
+        "helpText": "登录用户名固定为 opencode（引擎内置，不可更改）。"
+      },
+      {
+        "type": "password",
+        "field": "wizard_auth_password",
+        "label": "登录密码",
+        "initValue": "",
+        "tip": "登录 OpenCode Web 界面用的密码（用户名固定为 opencode）。留空则自动生成随机强密码并写入数据目录。"
+      }
+    ]
+  },
+  {
     "stepTitle": "使用协议与授权声明",
     "items": [
       {
