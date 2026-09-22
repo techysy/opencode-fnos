@@ -240,7 +240,7 @@ jobs:
           tar -xzf /tmp/app.tgz -C /tmp/ci-ui ui
           tar -xzf "$OUT" -C /tmp/ci-wiz wizard
           python3 - <<'PYEOF'
-          import json, re, sys
+          import json, os, re, sys
 
           cfg = json.load(open("/tmp/ci-ui/ui/config"))
           entry = list(cfg[".url"].values())[0]
