@@ -1,0 +1,78 @@
+--- a/packages/schema/src/config.ts
++++ b/packages/schema/src/config.ts
+@@ -110,7 +110,12 @@
+ }) {}
+ 
+ export const Patch = Schema.Struct({
+-  shell: Schema.NullOr(Schema.String),
++  shell: Schema.NullOr(Schema.String).pipe(optional),
++  // fnOS 补丁：允许通过 PATCH /api/experimental/config 写入自定义供应商。
++  // 上游此时只支持 shell，导致 UI 的「自定义供应商」保存路径无路可走
++  // （dialog 里直接 throw provider.custom.unavailable）。
++  // 这里放开 providers 字段，语义为「按 id 合并写入最高优先级全局配置」。
++  providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(optional),
+ }).annotate({ identifier: "Config.Patch" })
+ export interface Patch extends Schema.Schema.Type<typeof Patch> {}
+ 
+--- a/packages/core/src/config.ts
++++ b/packages/core/src/config.ts
+@@ -333,13 +333,17 @@
+           const filepath = (yield* Effect.filter(candidates, fs.isFile)).at(-1) ?? path.join(directory, "opencode.jsonc")
+           const text = (yield* fs.readFileStringSafe(filepath)) ?? "{}\n"
+           const updated = yield* Effect.try({
+-            try: () =>
+-              applyEdits(
+-                text,
+-                modify(text, ["shell"], patch.shell ?? undefined, {
+-                  formattingOptions: { tabSize: 2, insertSpaces: true },
+-                }),
+-              ),
++            try: () => {
++              // fnOS 补丁：原本只写 shell。这里再按 id 逐个写入 providers，
++              // 每次 modify 都基于上一轮结果，才能正确保留 JSONC 注释与格式。
++              let current = text
++              const format = { formattingOptions: { tabSize: 2, insertSpaces: true } }
++              if (patch.shell !== undefined) current = applyEdits(current, modify(current, ["shell"], patch.shell ?? undefined, format))
++              for (const [id, info] of Object.entries(patch.providers ?? {})) {
++                current = applyEdits(current, modify(current, ["provider", id], info, format))
++              }
++              return current
++            },
+             catch: (cause) => new FSUtil.FileSystemError({ method: "config.update", cause }),
+           })
+           yield* fs.writeWithDirs(filepath, updated.endsWith("\n") ? updated : `${updated}\n`)
+--- a/packages/app/src/providers/credentials/dialog.tsx
++++ b/packages/app/src/providers/credentials/dialog.tsx
+@@ -10,12 +10,14 @@
+ import { createStore, produce } from "solid-js/store"
+ import { ExternalLink } from "@/runtime/platform/external-link"
+ import { useData } from "@/runtime/server/current"
++import { useServerSDK } from "@/runtime/server/client"
+ import { useLanguage } from "@/runtime/i18n/language"
+ import { type FormState, headerRow, modelRow, validateCustomProvider } from "./form"
+ 
+ export function CustomProviderForm(props: { autofocus?: boolean } = {}) {
+   const dialog = useDialog()
+   const data = useData()
++  const serverSDK = useServerSDK()
+   const language = useLanguage()
+ 
+   const [form, setForm] = createStore<FormState>({
+@@ -104,8 +106,15 @@
+ 
+   const saveMutation = useMutation(() => ({
+     mutationFn: async (result: NonNullable<ReturnType<typeof validate>>): Promise<typeof result> => {
+-      // TODO: Restore custom providers when V2 exposes config and arbitrary credential APIs.
+-      throw new Error(language.t("provider.custom.unavailable"))
++      // fnOS 补丁：上游此处直接 throw provider.custom.unavailable，因为当时 V2 还没有
++      // 可写配置的 API。服务端已补上 PATCH /api/experimental/config 的 providers 字段，
++      // 这里改为真正写入优先级最高的全局配置文档（opencode.json / opencode.jsonc）。
++      await serverSDK.api.config.update({
++        providers: {
++          [result.providerID]: result.config,
++        },
++      })
++      return result
+     },
+     onSuccess: (result) => {
+       dialog.close()

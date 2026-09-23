@@ -130,11 +130,19 @@ jobs:
           #   fnos-adaptation:     CSP 加 frame-ancestors，允许飞牛桌面跨源 iframe 嵌入
           #   fnos-session-cookie: iframe 发不了 Basic 头，改为下发 HttpOnly Cookie
           #                        （解决登录不进去 / 刷新掉登录）
-          for p in fnos-adaptation fnos-session-cookie fnos-noauth; do
+          for p in fnos-adaptation fnos-session-cookie fnos-noauth fnos-custom-provider fnos-i18n-zh; do
             patch -p1 --forward < "$GITHUB_WORKSPACE/docs/patches/${p}.patch"
           done
 
           bun install --ignore-scripts
+
+          # fnos-custom-provider 改动了 Config.Patch schema，而 packages/client 下的
+          # 请求/响应类型是由 schema 生成的静态快照（不随构建自动更新）。
+          # 不重新生成的话，类型上仍是旧的 { shell }，前端编译会报
+          # "providers does not exist in type ConfigUpdateInput"。
+          # 注意：vite/bun 构建本身是 transpile-only 不做类型检查，所以这里主要是
+          # 保证生成的类型与协议一致（也便于后续 TypeScript 类型检查）。
+          bun run --cwd packages/client generate
 
           # build 脚本需要分支信息，tarball 不含 .git
           git init -q .

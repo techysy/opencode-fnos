@@ -46,7 +46,7 @@ if [ "${1:-}" = "--from-source" ]; then
     # fnos-session-cookie:  iframe 发不了 Basic 认证头，且页面加载后会把 ?auth_token=
     #                       从地址栏抹掉；改为首次访问下发 HttpOnly Cookie，后续请求凭
     #                       Cookie 认证，解决「登录不进去 / 刷新即掉登录」
-    for p in fnos-adaptation fnos-session-cookie fnos-noauth; do
+    for p in fnos-adaptation fnos-session-cookie fnos-noauth fnos-custom-provider fnos-i18n-zh; do
         (cd "$WORK/src" && patch -p1 --forward < "$ROOT/docs/patches/${p}.patch")
     done
 
